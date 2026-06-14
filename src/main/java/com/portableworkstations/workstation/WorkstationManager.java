@@ -4,6 +4,7 @@ import com.portableworkstations.PortableWorkstations;
 import com.portableworkstations.config.Config;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
@@ -46,6 +47,8 @@ public class WorkstationManager {
     private static final Map<ServerPlayer, Integer> PLAYER_WORKSTATION_COUNT = new WeakHashMap<>();
     /** Transient UUID marker on the item, so indistinguishable stacks can be told apart. */
     private static final Map<ServerPlayer, java.util.UUID> PLAYER_WORKSTATION_MARKER = new WeakHashMap<>();
+    /** For split anvil tracking: slot that holds the main stack */
+    private static final Map<ServerPlayer, Integer> PLAYER_WORKSTATION_ORIGINAL_SLOT = new WeakHashMap<>();
 
     // ── Cache ───────────────────────────────────────────────────────────────
 
@@ -133,6 +136,77 @@ public class WorkstationManager {
         PLAYER_WORKSTATION_ITEM.put(player, newId);
     }
 
+    /** Splits 1 from the anvil stack into a dedicated tracked slot. */
+    public static int splitAnvilForTracking(ServerPlayer player, int sourceSlot) {
+        var inv = player.getInventory().items;
+        ItemStack stack = inv.get(sourceSlot);
+        if (stack.isEmpty() || stack.getCount() <= 1) return sourceSlot; // already single
+
+        // Shrink source
+        stack.shrink(1);
+        // Find first free slot for the tracked 1-item
+        for (int i = 0; i < inv.size(); i++) {
+            if (inv.get(i).isEmpty()) {
+                var tracked = new ItemStack(stack.getItem(), 1);
+                // Apply UUID marker for resolution
+                var marker = java.util.UUID.randomUUID();
+                var tag = new CompoundTag();
+                tag.putUUID("pw_marker", marker);
+                tracked.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+                inv.set(i, tracked);
+                PLAYER_WORKSTATION_MARKER.put(player, marker);
+                return i; // tracked slot
+            }
+        }
+        // No free slot — put the tracked item back and don't split
+        stack.grow(1);
+        return sourceSlot;
+    }
+
+    /** Merges the tracked anvil back into the original stack (GUI closed before break). */
+    public static void mergeTrackedAnvilBack(ServerPlayer player, int trackedSlot, int originalSlot) {
+        var inv = player.getInventory().items;
+        if (trackedSlot < 0 || trackedSlot >= inv.size()) return;
+        ItemStack tracked = inv.get(trackedSlot);
+        if (tracked.isEmpty()) return;
+
+        // First try merging into original slot
+        if (originalSlot >= 0 && originalSlot < inv.size()) {
+            ItemStack dest = inv.get(originalSlot);
+            if (!dest.isEmpty() && net.minecraft.world.item.ItemStack.isSameItemSameComponents(dest, tracked)) {
+                int space = dest.getMaxStackSize() - dest.getCount();
+                int toMove = Math.min(space, tracked.getCount());
+                if (toMove > 0) {
+                    dest.grow(toMove);
+                    tracked.shrink(toMove);
+                    if (tracked.isEmpty()) { inv.set(trackedSlot, ItemStack.EMPTY); return; }
+                }
+            }
+        }
+        // Fallback: merge into any matching stack
+        for (int i = 0; i < inv.size(); i++) {
+            if (i == trackedSlot) continue;
+            ItemStack dest = inv.get(i);
+            if (!dest.isEmpty() && net.minecraft.world.item.ItemStack.isSameItemSameComponents(dest, tracked)) {
+                int space = dest.getMaxStackSize() - dest.getCount();
+                int toMove = Math.min(space, tracked.getCount());
+                if (toMove > 0) {
+                    dest.grow(toMove);
+                    tracked.shrink(toMove);
+                    if (tracked.isEmpty()) { inv.set(trackedSlot, ItemStack.EMPTY); return; }
+                }
+            }
+        }
+        // Last resort: put in first empty slot
+        for (int i = 0; i < inv.size(); i++) {
+            if (inv.get(i).isEmpty()) {
+                inv.set(i, tracked);
+                inv.set(trackedSlot, ItemStack.EMPTY);
+                return;
+            }
+        }
+    }
+
     /** Clears the marker tag from the item in the tracked slot (called after operation). */
     public static void clearMarkerFromSlot(ServerPlayer player) {
         int slot = PLAYER_WORKSTATION_SLOT.getOrDefault(player, -1);
@@ -206,14 +280,18 @@ public class WorkstationManager {
             PLAYER_WORKSTATION_SLOT.put(player, slot);
             var stack = player.getInventory().items.get(slot);
             PLAYER_WORKSTATION_COUNT.put(player, stack.getCount());
-            // Tag the exact stack with a transient UUID so indistinguishable
-            // stacks (same item, same count, same components) can be told apart.
+            // Split 1 from the anvil stack into a dedicated tracked slot.
+            // The tracked item gets visual upgrades; break consumes it.
+            // The main stack stays untouched in its original slot.
             if ("anvil".equals(menuType)) {
-                var marker = java.util.UUID.randomUUID();
-                var tag = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY);
-                stack.set(DataComponents.CUSTOM_DATA, tag.update(t -> t.putUUID("pw_marker", marker)));
-                player.getInventory().items.set(slot, stack); // ensure the change sticks
-                PLAYER_WORKSTATION_MARKER.put(player, marker);
+                int trackedSlot = splitAnvilForTracking(player, slot);
+                if (trackedSlot != slot) {
+                    PLAYER_WORKSTATION_ORIGINAL_SLOT.put(player, slot); // main stack
+                    PLAYER_WORKSTATION_SLOT.put(player, trackedSlot);   // tracked item
+                    PLAYER_WORKSTATION_COUNT.put(player, 1);
+                } else {
+                    // Already a single item — normal tracking applies
+                }
             }
         }
     }
@@ -288,9 +366,16 @@ public class WorkstationManager {
      * processing is complete or the player logs out.
      */
     public static void cleanupPlayer(ServerPlayer player) {
+        // Merge tracked anvil back into the main stack (if GUI closed before break)
+        Integer trackedSlot = PLAYER_WORKSTATION_SLOT.get(player);
+        Integer originalSlot = PLAYER_WORKSTATION_ORIGINAL_SLOT.get(player);
+        if (trackedSlot != null && originalSlot != null) {
+            mergeTrackedAnvilBack(player, trackedSlot, originalSlot);
+        }
         clearMarkerFromSlot(player);
         PLAYER_WORKSTATION_ITEM.remove(player);
         PLAYER_WORKSTATION_SLOT.remove(player);
+        PLAYER_WORKSTATION_ORIGINAL_SLOT.remove(player);
         PLAYER_WORKSTATION_COUNT.remove(player);
         PLAYER_WORKSTATION_MARKER.remove(player);
         PORTABLE_MENUS.remove(player.containerMenu);

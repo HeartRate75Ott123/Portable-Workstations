@@ -55,9 +55,9 @@ public class AnvilTracker {
 
         if (damage >= MAX_USES) {
             breakInSlot(player, slot);
-            slotMap.put(slot, 0); // next item in the stack starts from scratch
+            slotMap.put(slot, 0); // next tracked item starts fresh
         } else {
-            upgradeInSlot(player, slot);
+            upgradeInSlot(player, slot); // visual: anvil→chipped→damaged
         }
     }
 
