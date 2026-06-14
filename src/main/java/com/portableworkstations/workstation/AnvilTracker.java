@@ -35,7 +35,11 @@ public class AnvilTracker {
 
         // Resolve the actual slot — handles mid-gui inventory moves
         int slot = resolveSlot(player);
-        if (slot < 0) return;
+        if (slot < 0) {
+            // Tracked item completely absent — close GUI to prevent phantom usage
+            player.closeContainer();
+            return;
+        }
 
         Map<Integer, Integer> slotMap = perSlot(player);
 
