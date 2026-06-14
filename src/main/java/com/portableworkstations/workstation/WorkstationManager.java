@@ -68,9 +68,17 @@ public class WorkstationManager {
 
     // ── Config querying ─────────────────────────────────────────────────────
 
+    /** Returns true for the three vanilla anvil variants (never needs config). */
+    private static boolean isAnvilVariant(ResourceLocation id) {
+        String p = id.getPath();
+        return p.equals("anvil") || p.equals("chipped_anvil") || p.equals("damaged_anvil");
+    }
+
     public static boolean isWorkstationItem(ResourceLocation itemId) {
         if (getCache().containsKey(itemId)) return true;
-        // Auto-detected furnace (modded compat)
+        // Auto-detect anvil variants (chipped/damaged) even without config entries
+        if (isAnvilVariant(itemId)) return true;
+        // Auto-detect modded furnaces (Quark, More Furnaces, etc.)
         return Config.FURNACE_AUTO_DETECT.getAsBoolean()
             && Block.byItem(BuiltInRegistries.ITEM.get(itemId)) instanceof AbstractFurnaceBlock;
     }
@@ -81,6 +89,8 @@ public class WorkstationManager {
         if (id != null) {
             String type = getCache().get(id);
             if (type != null) return type;
+            // Auto-detect anvil variants → always "anvil"
+            if (isAnvilVariant(id)) return "anvil";
         }
         // Fallback for auto-detected furnaces
         if (Config.FURNACE_AUTO_DETECT.getAsBoolean() && id != null) {
