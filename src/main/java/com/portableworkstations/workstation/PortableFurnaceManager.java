@@ -1,10 +1,10 @@
 package com.portableworkstations.workstation;
 
-import com.portableworkstations.PortableWorkstations;
 import com.portableworkstations.mixin.AbstractFurnaceBlockEntityAccessor;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.SimpleContainer;
+import net.minecraft.world.entity.ExperienceOrb;
 import net.minecraft.world.inventory.SimpleContainerData;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -24,154 +24,76 @@ import java.util.UUID;
 
 /**
  * Manages background furnace smelting for portable workstations.
- * <p>
- * Each active furnace state ticks once per server tick, exactly like a
- * real {@code FurnaceBlockEntity}, burning fuel and progressing cooking.
- * Smelting continues even after the player closes the GUI and only stops
- * when all items are processed or fuel runs out.
- * <p>
- * States are keyed by {@link UUID} (not {@link ServerPlayer}) to guarantee
- * consistent lookups across network-thread -> main-thread hops where the
- * player object identity may differ.
+ * Ticks once per server tick matching vanilla {@code AbstractFurnaceBlockEntity}
+ * behaviour. Smelting continues after the GUI is closed; items drop on logout.
  */
 public class PortableFurnaceManager {
 
-    /** Per-player furnace state keyed by the player's UUID. Cleaned up on logout. */
     private static final Map<UUID, FurnaceState> ACTIVE_FURNACES = new HashMap<>();
 
     // ── Public API ──────────────────────────────────────────────────────────
 
-    /**
-     * Starts or retrieves the furnace state for the given player.
-     *
-     * @param player     the server player
-     * @param blockId    the item registry name (for logging)
-     * @param recipeType SMELTING / BLASTING / SMOKING
-     * @return a {@link FurnaceState}
-     */
     public static FurnaceState startOrGet(ServerPlayer player, ResourceLocation blockId,
                                            RecipeType<? extends AbstractCookingRecipe> recipeType) {
         UUID uuid = player.getUUID();
         FurnaceState state = ACTIVE_FURNACES.get(uuid);
-        if (state != null && state.recipeType.equals(recipeType)) {
-            PortableWorkstations.LOGGER.debug("Reused furnace for {} (items: {}/{}/{}, progress={})",
-                    player.getName().getString(),
-                    state.container.getItem(0).getDisplayName().getString(),
-                    state.container.getItem(1).getDisplayName().getString(),
-                    state.container.getItem(2).getDisplayName().getString(),
-                    state.data.get(2));
-            return state;
+        if (state == null) {
+            state = new FurnaceState(player, recipeType);
+            ACTIVE_FURNACES.put(uuid, state);
+        } else {
+            state.recipeType = recipeType; // update recipe type to current menu
         }
-        if (state != null) {
-            stop(player);
-        }
-        state = new FurnaceState(player, recipeType);
-        ACTIVE_FURNACES.put(uuid, state);
-        PortableWorkstations.LOGGER.debug("Created furnace for {} ({})", player.getName().getString(), blockId);
         return state;
     }
 
-    /** Removes and stops a player's furnace state. */
-    public static void stop(ServerPlayer player) {
-        FurnaceState removed = ACTIVE_FURNACES.remove(player.getUUID());
-        if (removed != null) {
-            PortableWorkstations.LOGGER.debug("Stopped furnace for {}", player.getName().getString());
-        }
-    }
-
-    /** Removes and stops by raw UUID (for logout). */
-    public static void stop(UUID playerUuid) {
-        FurnaceState removed = ACTIVE_FURNACES.remove(playerUuid);
-        if (removed != null) {
-            PortableWorkstations.LOGGER.debug("Stopped furnace for UUID {}", playerUuid);
-        }
-    }
-
-    /** Stops all portable furnaces (server shutdown). */
-    public static void stopAll() {
-        ACTIVE_FURNACES.clear();
-    }
-
-    /** Returns the furnace state for a player, or {@code null}. */
-    @Nullable
-    public static FurnaceState get(UUID playerUuid) {
-        return ACTIVE_FURNACES.get(playerUuid);
-    }
+    public static void stop(ServerPlayer player) { ACTIVE_FURNACES.remove(player.getUUID()); }
+    public static void stop(UUID playerUuid) { ACTIVE_FURNACES.remove(playerUuid); }
+    public static void stopAll() { ACTIVE_FURNACES.clear(); }
+    @Nullable public static FurnaceState get(UUID playerUuid) { return ACTIVE_FURNACES.get(playerUuid); }
 
     // ── Block placement sync ────────────────────────────────────────────────
 
-    /**
-     * When the player places a furnace-type block from their inventory, any
-     * items and cooking progress stored in the portable {@link FurnaceState}
-     * are transferred into the placed {@link AbstractFurnaceBlockEntity}.
-     * The portable state is then cleared, preventing item duplication.
-     */
     @SubscribeEvent
     public static void onBlockPlaced(BlockEvent.EntityPlaceEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
-
-        // Only handle furnace-type blocks
         if (!(event.getPlacedBlock().getBlock() instanceof AbstractFurnaceBlock)) return;
 
-        // Map the block to its recipe type
         RecipeType<? extends AbstractCookingRecipe> recipeType;
-        if (event.getPlacedBlock().is(Blocks.FURNACE)) {
-            recipeType = RecipeType.SMELTING;
-        } else if (event.getPlacedBlock().is(Blocks.BLAST_FURNACE)) {
-            recipeType = RecipeType.BLASTING;
-        } else if (event.getPlacedBlock().is(Blocks.SMOKER)) {
-            recipeType = RecipeType.SMOKING;
-        } else {
-            return;
-        }
+        if (event.getPlacedBlock().is(Blocks.FURNACE))          recipeType = RecipeType.SMELTING;
+        else if (event.getPlacedBlock().is(Blocks.BLAST_FURNACE)) recipeType = RecipeType.BLASTING;
+        else if (event.getPlacedBlock().is(Blocks.SMOKER))      recipeType = RecipeType.SMOKING;
+        else return;
 
         FurnaceState state = ACTIVE_FURNACES.get(player.getUUID());
-        if (state == null || !state.recipeType.equals(recipeType)) return;
-
-        // Get the placed block entity
+        if (state == null) return;
         if (!(player.level().getBlockEntity(event.getPos()) instanceof AbstractFurnaceBlockEntity be)) return;
 
-        // Transfer items (slot layout matches: 0=input 1=fuel 2=result)
-        boolean hadItems = false;
         for (int i = 0; i < 3; i++) {
             ItemStack stack = state.container.getItem(i);
-            if (!stack.isEmpty()) {
-                be.setItem(i, stack.copy());
-                state.container.setItem(i, ItemStack.EMPTY);
-                hadItems = true;
-            }
+            if (!stack.isEmpty()) { be.setItem(i, stack.copy()); state.container.setItem(i, ItemStack.EMPTY); }
         }
 
-        // Transfer cooking data
-        AbstractFurnaceBlockEntityAccessor acc = (AbstractFurnaceBlockEntityAccessor) be;
-        if (state.data.get(0) > 0) {
-            acc.portableworkstations$setLitTime(state.data.get(0));
-            acc.portableworkstations$setLitDuration(state.data.get(1));
-            hadItems = true;
-        }
-        if (state.data.get(2) > 0 || state.data.get(3) > 0) {
-            acc.portableworkstations$setCookingProgress(state.data.get(2));
-            acc.portableworkstations$setCookingTotalTime(state.data.get(3));
-            hadItems = true;
-        }
-        be.setChanged(); // mark BE dirty so it saves+ticks properly
+        var acc = (AbstractFurnaceBlockEntityAccessor) be;
+        if (state.data.get(0) > 0) { acc.portableworkstations$setLitTime(state.data.get(0)); acc.portableworkstations$setLitDuration(state.data.get(1)); }
+        if (state.data.get(2) > 0 || state.data.get(3) > 0) { acc.portableworkstations$setCookingProgress(state.data.get(2)); acc.portableworkstations$setCookingTotalTime(state.data.get(3)); }
+        be.setChanged();
 
-        // Stop the portable furnace (prevents duping)
         ACTIVE_FURNACES.remove(player.getUUID());
-
-        if (hadItems) {
-            PortableWorkstations.LOGGER.debug("Transferred portable furnace to placed block for {}",
-                player.getName().getString());
-        }
     }
 
     // ── Per-player furnace state ────────────────────────────────────────────
 
     public static class FurnaceState {
-        public final RecipeType<? extends AbstractCookingRecipe> recipeType;
-        public final SimpleContainer container = new SimpleContainer(3);   // 0=input 1=fuel 2=result
-        public final SimpleContainerData data = new SimpleContainerData(4); // 0=burnTime 1=fuelDuration 2=cookingProgress 3=cookingTotalTime
+        /** Current recipe type; updated each time a menu is opened (shared state). */
+        public RecipeType<? extends AbstractCookingRecipe> recipeType;
+        public final SimpleContainer container = new SimpleContainer(3);
+        public final SimpleContainerData data = new SimpleContainerData(4);
         public final UUID playerUuid;
+
+        /** Accumulated experience from completed smelts not yet awarded. */
+        float pendingXp = 0;
+        /** Last known result-slot count — detects when the player takes items. */
+        int lastResultCount = 0;
 
         FurnaceState(ServerPlayer player, RecipeType<? extends AbstractCookingRecipe> recipeType) {
             this.playerUuid = player.getUUID();
@@ -185,15 +107,12 @@ public class PortableFurnaceManager {
     public static void onServerTick(ServerTickEvent.Post event) {
         if (ACTIVE_FURNACES.isEmpty()) return;
 
-        for (Map.Entry<UUID, FurnaceState> entry : ACTIVE_FURNACES.entrySet()) {
-            FurnaceState state = entry.getValue();
+        ACTIVE_FURNACES.forEach((uuid, state) -> {
             ServerPlayer player = findPlayer(state.playerUuid);
-            if (player == null) continue; // offline — skip, items dropped on logout
-            tickFurnace(player, state);
-        }
+            if (player != null) tickFurnace(player, state);
+        });
     }
 
-    /** Resolve a ServerPlayer from UUID (works on the server thread). */
     @Nullable
     private static ServerPlayer findPlayer(UUID uuid) {
         var server = net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
@@ -202,111 +121,96 @@ public class PortableFurnaceManager {
 
     private static void tickFurnace(ServerPlayer player, FurnaceState state) {
         Level level = player.level();
-        SimpleContainer container = state.container;
-        SimpleContainerData data = state.data;
+        SimpleContainer c = state.container;
+        SimpleContainerData d = state.data;
 
-        ItemStack input = container.getItem(0);
-        ItemStack fuel = container.getItem(1);
-        ItemStack result = container.getItem(2);
-
-        boolean wasBurning = data.get(0) > 0;
-
-        // 1) Vanilla fuel burn: always decrement when lit, even with nothing to smelt.
-        if (wasBurning) {
-            data.set(0, data.get(0) - 1);
+        // ── Early exit when furnace is completely idle ──────────────────────
+        ItemStack input = c.getItem(0);
+        ItemStack fuel = c.getItem(1);
+        ItemStack result = c.getItem(2);
+        boolean burning = d.get(0) > 0;
+        if (!burning && input.isEmpty() && fuel.isEmpty() && result.isEmpty()) {
+            state.lastResultCount = 0;
+            return;                     // nothing to do — skip recipe lookup
         }
 
-        // 2) Refuel when burn time expires (vanilla: consumes fuel regardless of work).
-        boolean justLit = false;
-        if (data.get(0) <= 0) {
-            if (!fuel.isEmpty()) {
-                Map<Item, Integer> fuelMap = AbstractFurnaceBlockEntity.getFuel();
-                int burnTime = fuelMap.getOrDefault(fuel.getItem(), 0);
-                if (burnTime > 0) {
-                    fuel.shrink(1);
-                    container.setItem(1, fuel);
-                    data.set(0, burnTime);
-                    data.set(1, burnTime);
-                    wasBurning = true;
-                    justLit = true;
+        // ── 1) Decrement burn time ─────────────────────────────────────────
+        if (burning) d.set(0, d.get(0) - 1);
+        burning = d.get(0) > 0;
+
+        // ── 2) Recipe lookup ───────────────────────────────────────────────
+        RecipeHolder<? extends AbstractCookingRecipe> recipe = null;
+        boolean haveWork = false;
+        if (!input.isEmpty()) {
+            recipe = level.getRecipeManager()
+                .getRecipeFor(state.recipeType, new SingleRecipeInput(input), level)
+                .orElse(null);
+            haveWork = recipe != null && canOutputAccept(c, recipe, level);
+        }
+
+        // ── 3) Consume fuel (only when there's work) ───────────────────────
+        if (!burning && haveWork && !fuel.isEmpty()) {
+            int burnTime = AbstractFurnaceBlockEntity.getFuel().getOrDefault(fuel.getItem(), 0);
+            if (burnTime > 0) {
+                fuel.shrink(1);
+                c.setItem(1, fuel);
+                d.set(0, burnTime);
+                d.set(1, burnTime);
+                burning = true;
+            }
+        }
+
+        // ── 4) Cooking ─────────────────────────────────────────────────────
+        if (burning && haveWork) {
+            if (d.get(3) == 0) d.set(3, recipe.value().getCookingTime());
+            d.set(2, d.get(2) + 1);
+
+            if (d.get(2) >= d.get(3)) {
+                completeSmelt(c, recipe, level);
+                state.pendingXp += recipe.value().getExperience();
+                d.set(2, 0);
+                d.set(3, 0);
+            }
+        } else if (d.get(2) > 0 && !haveWork) {
+            d.set(2, 0);
+        }
+
+        // ── 5) Award XP when player takes result ──────────────────────────
+        if (state.pendingXp > 0) {
+            int resultCount = c.getItem(2).getCount();
+            if (resultCount < state.lastResultCount) {
+                int xp = (int) state.pendingXp;
+                if (xp > 0) {
+                    ExperienceOrb.award(player.serverLevel(), player.position(), xp);
                 }
+                state.pendingXp = 0;
             }
-        }
-
-        // 3) Look up recipe and cook when possible.
-        RecipeHolder<? extends AbstractCookingRecipe> recipe = findRecipe(level, container, state.recipeType);
-        boolean isBurning = data.get(0) > 0;
-        boolean haveWork = recipe != null && canOutputAccept(container, recipe, level);
-
-        if (isBurning && haveWork) {
-            if (data.get(3) == 0) {
-                data.set(3, recipe.value().getCookingTime());
-            }
-            data.set(2, data.get(2) + 1);
-
-            // Log progress occasionally (start + every 50 ticks)
-            if (data.get(2) == 1 || data.get(2) % 50 == 0) {
-                PortableWorkstations.LOGGER.debug("Furnace {}: cooking {}/{}, recipe={}",
-                    player.getName().getString(), data.get(2), data.get(3), recipe.id());
-            }
-
-            if (data.get(2) >= data.get(3)) {
-                completeSmelt(container, recipe, level);
-                data.set(2, 0);
-                data.set(3, 0);
-                PortableWorkstations.LOGGER.debug("Furnace {}: smelt complete",
-                    player.getName().getString());
-            }
-        } else if (data.get(2) > 0 && !haveWork) {
-            data.set(2, 0); // reset partial progress
-        }
-
-        // 4) Compact logging — only on state transitions
-        if (justLit) {
-            PortableWorkstations.LOGGER.debug("Furnace {}: lit ({} ticks of fuel)",
-                player.getName().getString(), data.get(0));
-        }
-        if (wasBurning && !isBurning) {
-            PortableWorkstations.LOGGER.debug("Furnace {}: fuel exhausted",
-                player.getName().getString());
+            state.lastResultCount = resultCount;
+        } else {
+            state.lastResultCount = c.getItem(2).getCount();
         }
     }
 
     // ── Recipe helpers ──────────────────────────────────────────────────────
 
-    @Nullable
-    private static RecipeHolder<? extends AbstractCookingRecipe> findRecipe(
-            Level level, SimpleContainer container,
-            RecipeType<? extends AbstractCookingRecipe> recipeType) {
-        ItemStack input = container.getItem(0);
-        if (input.isEmpty()) return null;
-        return level.getRecipeManager()
-                .getRecipeFor(recipeType, new SingleRecipeInput(input), level)
-                .orElse(null);
-    }
-
-    private static boolean canOutputAccept(SimpleContainer container,
+    private static boolean canOutputAccept(SimpleContainer c,
                                            RecipeHolder<? extends AbstractCookingRecipe> recipe, Level level) {
         ItemStack output = recipe.value().getResultItem(level.registryAccess());
         if (output.isEmpty()) return false;
-        ItemStack result = container.getItem(2);
+        ItemStack result = c.getItem(2);
         if (result.isEmpty()) return true;
-        if (!ItemStack.isSameItemSameComponents(result, output)) return false;
-        return result.getCount() < result.getMaxStackSize();
+        return ItemStack.isSameItemSameComponents(result, output) && result.getCount() < result.getMaxStackSize();
     }
 
-    private static void completeSmelt(SimpleContainer container,
+    private static void completeSmelt(SimpleContainer c,
                                       RecipeHolder<? extends AbstractCookingRecipe> recipe, Level level) {
-        ItemStack input = container.getItem(0);
+        ItemStack input = c.getItem(0);
         ItemStack output = recipe.value().getResultItem(level.registryAccess());
-        ItemStack result = container.getItem(2);
-        if (result.isEmpty()) {
-            container.setItem(2, output.copy());
-        } else {
-            result.grow(output.getCount());
-            container.setItem(2, result.copy());
-        }
+        ItemStack result = c.getItem(2);
+        if (result.isEmpty()) { c.setItem(2, output.copy()); }
+        else { result.grow(output.getCount()); c.setItem(2, result.copy()); }
         input.shrink(1);
-        container.setItem(0, input);
+        c.setItem(0, input);
     }
+
 }

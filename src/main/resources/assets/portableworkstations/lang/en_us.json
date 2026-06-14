@@ -10,6 +10,9 @@
   "portableworkstations.configuration.section.workstations.toml.title": "Workstation Definitions",
   "portableworkstations.configuration.enabled": "Mod Enabled",
   "portableworkstations.configuration.definitions": "Workstation Definitions",
+  "portableworkstations.configuration.furnace_auto_detect": "Modded Furnace Auto-Detect",
+  "portableworkstations.configuration.furnace_auto_detect.enabled": "Auto-Detect Furnace",
+  "portableworkstations.configuration.furnace_auto_detect.default_type": "Default Furnace Type",
 
   "container.crafting": "Portable Crafting Table",
   "container.anvil": "Portable Anvil",

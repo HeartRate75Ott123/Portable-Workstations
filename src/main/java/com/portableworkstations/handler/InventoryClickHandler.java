@@ -65,6 +65,5 @@ public class InventoryClickHandler {
         // Tell the server to open the workstation menu
         PacketDistributor.sendToServer(new OpenWorkstationPayload(itemId.toString()));
 
-        PortableWorkstations.LOGGER.debug("Sent workstation open packet for {}", itemId);
     }
 }

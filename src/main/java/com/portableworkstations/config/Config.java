@@ -5,15 +5,6 @@ import net.neoforged.neoforge.common.ModConfigSpec;
 import java.util.List;
 import java.util.Set;
 
-/**
- * Mod configuration using NeoForge's ModConfigSpec.
- * <p>
- * Settings:
- * <ul>
- *   <li>{@code general.enabled} — Master toggle for the entire mod.</li>
- *   <li>{@code workstations.definitions} — List of "block_id=menu_type" entries.</li>
- * </ul>
- */
 public class Config {
     private static final ModConfigSpec.Builder BUILDER = new ModConfigSpec.Builder();
 
@@ -22,6 +13,13 @@ public class Config {
 
     // ── Workstation Definitions ──────────────────────────────────────────────
     public static final ModConfigSpec.ConfigValue<List<? extends String>> WORKSTATION_DEFINITIONS;
+
+    // ── Modded furnace auto-detection ────────────────────────────────────────
+    public static final ModConfigSpec.BooleanValue FURNACE_AUTO_DETECT;
+    public static final ModConfigSpec.ConfigValue<String> FURNACE_DEFAULT_TYPE;
+
+    /** Subset of menu types valid for the furnace_default_type field. */
+    private static final Set<String> KNOWN_MENU_TYPES_CONTAINS_FURNACE = Set.of("furnace", "blast_furnace", "smoker");
 
     static {
         BUILDER.comment("General settings").push("general");
@@ -35,6 +33,8 @@ public class Config {
                 .define("enabled", true);
 
         BUILDER.pop();
+
+        // ── Workstation definitions ─────────────────────────────────────────
 
         BUILDER.comment("Workstation definitions").push("workstations");
 
@@ -54,10 +54,34 @@ public class Config {
                         "  blast_furnace — Blast furnace",
                         "  smoker        — Smoker",
                         "",
-                        "Example: \"minecraft:crafting_table=crafting\"",
+                        "Example: \"minecraft:anvil=anvil\"",
                         "         \"minecraft:furnace=furnace\""
                 )
                 .defineListAllowEmpty("definitions", Config::defaultWorkstations, Config::validateWorkstationEntry);
+
+        BUILDER.pop();
+
+        // ── Furnace auto-detection ──────────────────────────────────────────
+
+        BUILDER.comment(
+                "Modded furnace auto-detection.",
+                "When enabled, any item whose corresponding block extends",
+                "AbstractFurnaceBlock (e.g. Quark variants, Mythic Metals furnaces)",
+                "will be treated as a portable workstation without needing a",
+                "manual config entry."
+        ).push("furnace_auto_detect");
+
+        FURNACE_AUTO_DETECT = BUILDER
+                .comment("Set to false to disable auto-detection of modded furnaces.")
+                .define("enabled", true);
+
+        FURNACE_DEFAULT_TYPE = BUILDER
+                .comment(
+                        "Which menu_type to use for auto-detected furnaces.",
+                        "Default: \"furnace\" — opens a regular FurnaceMenu with RecipeType.SMELTING.",
+                        "Other options: blast_furnace, smoker"
+                )
+                .define("default_type", "furnace", s -> s instanceof String type && KNOWN_MENU_TYPES_CONTAINS_FURNACE.contains(type));
 
         BUILDER.pop();
     }
@@ -88,9 +112,6 @@ public class Config {
             "furnace", "blast_furnace", "smoker"
     );
 
-    /**
-     * Validates a single config entry: must be "resource_location=menu_type".
-     */
     private static boolean validateWorkstationEntry(Object obj) {
         if (!(obj instanceof String entry)) return false;
         int eq = entry.indexOf('=');
@@ -99,10 +120,7 @@ public class Config {
         String blockId = entry.substring(0, eq);
         String menuType = entry.substring(eq + 1);
 
-        // Validate blockId as a ResourceLocation
         if (net.minecraft.resources.ResourceLocation.tryParse(blockId) == null) return false;
-
-        // Validate menuType
         return KNOWN_MENU_TYPES.contains(menuType);
     }
 }

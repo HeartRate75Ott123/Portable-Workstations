@@ -13,6 +13,9 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.*;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.RecipeType;
+import net.minecraft.world.level.block.AbstractFurnaceBlock;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
@@ -39,21 +42,27 @@ public class WorkstationManager {
 
     /**
      * Returns {@code true} if the given item registry name matches a configured
-     * workstation entry.
+     * workstation entry OR is an auto-detected furnace block.
      */
     public static boolean isWorkstationItem(ResourceLocation itemId) {
+        // 1) Exact config match
         String idStr = itemId.toString();
         for (String entry : Config.WORKSTATION_DEFINITIONS.get()) {
             int eq = entry.indexOf('=');
-            if (eq > 0 && entry.substring(0, eq).equals(idStr)) {
-                return true;
-            }
+            if (eq > 0 && entry.substring(0, eq).equals(idStr)) return true;
+        }
+        // 2) Auto-detected furnace (modded compat — Quark, Mythic Metals, etc.)
+        if (Config.FURNACE_AUTO_DETECT.getAsBoolean()) {
+            ItemStack stack = new ItemStack(BuiltInRegistries.ITEM.get(itemId));
+            Block block = Block.byItem(stack.getItem());
+            return block instanceof AbstractFurnaceBlock;
         }
         return false;
     }
 
     /**
      * Looks up the menu-type string for a given block ID from the config.
+     * Falls back to the furnace auto-detect default for modded furnaces.
      *
      * @return the menu type (e.g. "crafting"), or {@code null} if not found
      */
@@ -63,6 +72,17 @@ public class WorkstationManager {
             int eq = entry.indexOf('=');
             if (eq > 0 && entry.substring(0, eq).equals(blockId)) {
                 return entry.substring(eq + 1);
+            }
+        }
+        // Fallback: check if it's an auto-detected furnace
+        if (Config.FURNACE_AUTO_DETECT.getAsBoolean()) {
+            ResourceLocation id = ResourceLocation.tryParse(blockId);
+            if (id != null) {
+                ItemStack stack = new ItemStack(BuiltInRegistries.ITEM.get(id));
+                Block block = Block.byItem(stack.getItem());
+                if (block instanceof AbstractFurnaceBlock) {
+                    return Config.FURNACE_DEFAULT_TYPE.get();
+                }
             }
         }
         return null;
@@ -202,10 +222,6 @@ public class WorkstationManager {
         );
 
         if (!stillHasItem) {
-            PortableWorkstations.LOGGER.debug(
-                    "Player {} no longer has {}, closing workstation",
-                    player.getName().getString(), expectedItem
-            );
             player.closeContainer();
             cleanupPlayer(player);
         }
