@@ -13,6 +13,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.level.BlockEvent;
 
 import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Anvil damage tracking — deterministic, no randomness per use.
@@ -68,9 +69,11 @@ public class AnvilTracker {
 
     // ── Deterministic counter allocation ────────────────────────────────────
 
+    private static final Random RNG = new Random();
+
     /** Generates 5–12 inclusive (avg ~8.5). */
     private static int nextUses() {
-        return 5 + new Random().nextInt(8);
+        return 5 + RNG.nextInt(8);
     }
 
     /** Returns the initial stage based on item variant. */
@@ -198,7 +201,8 @@ public class AnvilTracker {
             default -> null;
         };
         if (newBlock != null) player.level().setBlock(event.getPos(), newBlock.defaultBlockState(), 3);
-        perPlayer(player).remove(slot);
+        // Keep tracker data — mining the block and right-clicking again will
+        // migrate it via resolveSlot, preserving the damage stage.
     }
 
     public static void clear() { TRACKER.clear(); }
