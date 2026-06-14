@@ -15,120 +15,176 @@ import net.neoforged.neoforge.event.level.BlockEvent;
 
 import java.util.*;
 
+/**
+ * Anvil damage tracking that operates on the exact inventory slot
+ * the player right-clicked. Other stacks in the inventory are NOT
+ * affected, and per-stack damage counters are independent.
+ */
 public class AnvilTracker {
 
     private static final int MAX_USES = 3;
     private static final float DAMAGE_CHANCE = 0.12f;
 
-    /** Per-player: normalized item ID → accumulated damage count. */
-    private static final Map<ServerPlayer, Map<ResourceLocation, Integer>> DAMAGE_MAP = new WeakHashMap<>();
+    /** Per-player: inventory slot index → damage count. */
+    private static final Map<ServerPlayer, Map<Integer, Integer>> DAMAGE_MAP = new WeakHashMap<>();
 
     // ── Public API ──────────────────────────────────────────────────────────
 
     public static void onAnvilUsed(ServerPlayer player) {
         if (player.getRandom().nextFloat() >= DAMAGE_CHANCE) return;
 
-        ResourceLocation rawId = WorkstationManager.getPlayerWorkstationItem(player);
-        if (rawId == null) return;
+        // Resolve the actual slot — handles mid-gui inventory moves
+        int slot = resolveSlot(player);
+        if (slot < 0) return;
 
-        ResourceLocation itemId = normalize(rawId);
-        int damage = DAMAGE_MAP
-                .computeIfAbsent(player, k -> new HashMap<>())
-                .merge(itemId, 1, Integer::sum);
+        Map<Integer, Integer> slotMap = perSlot(player);
+
+        // Initialise counter based on the item variant already in the slot
+        if (!slotMap.containsKey(slot)) {
+            ItemStack stack = player.getInventory().items.get(slot);
+            String p = BuiltInRegistries.ITEM.getKey(stack.getItem()).getPath();
+            int base = p.equals("damaged_anvil") ? 2 : p.equals("chipped_anvil") ? 1 : 0;
+            if (base > 0) slotMap.put(slot, base);
+        }
+
+        int damage = slotMap.merge(slot, 1, Integer::sum);
 
         if (damage >= MAX_USES) {
-            breakAnvil(player);
-            DAMAGE_MAP.get(player).remove(itemId);
+            breakInSlot(player, slot);
+            slotMap.remove(slot);
         } else {
-            upgradeAnvilVariant(player, damage);
+            upgradeInSlot(player, slot);
         }
     }
 
-    public static int getDamageLevel(ServerPlayer player, ResourceLocation itemId) {
-        Map<ResourceLocation, Integer> map = DAMAGE_MAP.get(player);
-        return map != null ? map.getOrDefault(normalize(itemId), 0) : 0;
+    /** Returns damage level (0–2) for the given player's tracked slot. */
+    public static int getDamageLevel(ServerPlayer player, ResourceLocation ignored) {
+        int slot = resolveSlot(player);
+        return slot >= 0 ? perSlot(player).getOrDefault(slot, 0) : 0;
     }
 
-    public static void resetDamage(ServerPlayer player, ResourceLocation itemId) {
-        Map<ResourceLocation, Integer> map = DAMAGE_MAP.get(player);
-        if (map != null) map.remove(normalize(itemId));
+    public static void resetDamage(ServerPlayer player, ResourceLocation ignored) {
+        int slot = resolveSlot(player);
+        if (slot >= 0) perSlot(player).remove(slot);
     }
 
-    // ── Item visual upgrade ─────────────────────────────────────────────────
-
-    /** Normalises any anvil variant to {@code minecraft:anvil} for tracking. */
-    private static ResourceLocation normalize(ResourceLocation id) {
-        String p = id.getPath();
-        if (p.equals("anvil") || p.equals("chipped_anvil") || p.equals("damaged_anvil")) {
-            return ResourceLocation.withDefaultNamespace("anvil");
-        }
-        return id;
-    }
-
-    /** Returns the item registry name that corresponds to the given damage level. */
-    private static ResourceLocation variantForDamage(int damage) {
-        return switch (damage) {
-            case 1 -> ResourceLocation.withDefaultNamespace("chipped_anvil");
-            case 2 -> ResourceLocation.withDefaultNamespace("damaged_anvil");
-            default -> ResourceLocation.withDefaultNamespace("anvil");
-        };
-    }
+    // ─── Slot resolution (handles mid-gui inventory moves) ───────────────────
 
     /**
-     * Upgrades ALL matching stacks in the player's inventory to the next
-     * visual variant. Without this, a player with multiple anvil stacks
-     * would have inconsistent item textures.
+     * Returns the actual slot the player's workstation item is in.
+     * If the tracked slot is stale (item moved), searches the inventory and
+     * migrates the damage counter to the new slot so tracking isn't lost.
      */
-    private static void upgradeAnvilVariant(ServerPlayer player, int newDamage) {
-        ResourceLocation targetId = variantForDamage(newDamage);
-        ResourceLocation sourceId = newDamage == 1
-                ? ResourceLocation.withDefaultNamespace("anvil")
-                : ResourceLocation.withDefaultNamespace("chipped_anvil");
+    private static int resolveSlot(ServerPlayer player) {
+        int slot = WorkstationManager.getPlayerWorkstationSlot(player);
+        ResourceLocation itemId = WorkstationManager.getPlayerWorkstationItem(player);
+        java.util.UUID marker = WorkstationManager.getPlayerWorkstationMarker(player);
+        if (itemId == null) return -1;
 
-        Item targetItem = BuiltInRegistries.ITEM.get(targetId);
         Inventory inv = player.getInventory();
-
-        for (int i = 0; i < inv.items.size(); i++) {
-            ItemStack stack = inv.items.get(i);
-            if (!stack.isEmpty() && BuiltInRegistries.ITEM.getKey(stack.getItem()).equals(sourceId)) {
-                inv.items.set(i, new ItemStack(targetItem, stack.getCount()));
-                // 不 return — 继续遍历其他槽位
+        // 1) Quick path: tracked slot still has the right item
+        if (slot >= 0 && slot < inv.items.size()) {
+            ItemStack s = inv.items.get(slot);
+            if (!s.isEmpty() && BuiltInRegistries.ITEM.getKey(s.getItem()).equals(itemId)) {
+                return slot;
             }
         }
+        // 2) Search by marker UUID (bulletproof for identical stacks)
+        if (marker != null) {
+            for (int i = 0; i < inv.items.size(); i++) {
+                ItemStack s = inv.items.get(i);
+                if (s.isEmpty()) continue;
+                var cd = s.get(net.minecraft.core.component.DataComponents.CUSTOM_DATA);
+                if (cd != null && marker.equals(cd.copyTag().getUUID("pw_marker"))) {
+                    return migrateCounter(player, slot, i);
+                }
+            }
+        }
+        // 3) Fallback: prefer same-count stack → first match
+        int expectedCount = WorkstationManager.getPlayerWorkstationCount(player);
+        int bestSlot = -1;
+        for (int i = 0; i < inv.items.size(); i++) {
+            ItemStack s = inv.items.get(i);
+            if (s.isEmpty() || !BuiltInRegistries.ITEM.getKey(s.getItem()).equals(itemId)) continue;
+            if (s.getCount() == expectedCount) { bestSlot = i; break; }
+            if (bestSlot < 0) bestSlot = i;
+        }
+        if (bestSlot >= 0) return migrateCounter(player, slot, bestSlot);
+        return -1;
     }
+
+    /** Moves the damage counter from oldSlot to newSlot and updates WS tracking. */
+    private static int migrateCounter(ServerPlayer player, int oldSlot, int newSlot) {
+        Map<Integer, Integer> slotMap = perSlot(player);
+        if (oldSlot >= 0 && slotMap.containsKey(oldSlot)) {
+            slotMap.put(newSlot, slotMap.remove(oldSlot));
+        }
+        WorkstationManager.updateWorkstationSlot(player, newSlot);
+        return newSlot;
+    }
+
+    // ─── Slot-precise operations ─────────────────────────────────────────────
 
     /**
-     * When the anvil "breaks" (counter reaches 3), remove one item.
-     * At this point the stack has already been upgraded to {@code damaged_anvil}.
+     * Upgrades the item in the tracked slot to the next visual tier
+     * (anvil → chipped_anvil → damaged_anvil). No-op if already at max.
      */
-    private static void breakAnvil(ServerPlayer player) {
+    private static void upgradeInSlot(ServerPlayer player, int slot) {
         Inventory inv = player.getInventory();
-        ResourceLocation damagedId = ResourceLocation.withDefaultNamespace("damaged_anvil");
+        if (slot >= inv.items.size()) return;
+        ItemStack stack = inv.items.get(slot);
+        if (stack.isEmpty()) return;
 
-        for (int i = 0; i < inv.items.size(); i++) {
-            ItemStack stack = inv.items.get(i);
-            if (!stack.isEmpty() && BuiltInRegistries.ITEM.getKey(stack.getItem()).equals(damagedId)) {
-                stack.shrink(1);
-                if (stack.isEmpty()) inv.items.set(i, ItemStack.EMPTY);
-                player.level().playSound(null, player.blockPosition(),
-                        SoundEvents.ANVIL_BREAK, SoundSource.BLOCKS, 1.0f, 1.0f);
-                return;
-            }
+        String path = BuiltInRegistries.ITEM.getKey(stack.getItem()).getPath();
+        ResourceLocation targetId;
+        if (path.equals("anvil")) {
+            targetId = ResourceLocation.withDefaultNamespace("chipped_anvil");
+        } else if (path.equals("chipped_anvil")) {
+            targetId = ResourceLocation.withDefaultNamespace("damaged_anvil");
+        } else {
+            return; // already damaged_anvil or unknown
         }
+        ItemStack newStack = new ItemStack(BuiltInRegistries.ITEM.get(targetId), stack.getCount());
+        // Preserve the UUID marker on the new stack
+        var oldCd = stack.get(net.minecraft.core.component.DataComponents.CUSTOM_DATA);
+        if (oldCd != null && oldCd.copyTag().hasUUID("pw_marker")) {
+            newStack.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA,
+                    net.minecraft.world.item.component.CustomData.of(oldCd.copyTag()));
+        }
+        inv.items.set(slot, newStack);
+        WorkstationManager.overrideWorkstationItem(player, targetId);
     }
 
-    // ── Block placement sync ────────────────────────────────────────────────
+    /** Removes one item from the specific slot, plays the break sound and cleans up the marker. */
+    private static void breakInSlot(ServerPlayer player, int slot) {
+        Inventory inv = player.getInventory();
+        if (slot >= inv.items.size()) return;
+        ItemStack stack = inv.items.get(slot);
+        if (stack.isEmpty()) return;
+
+        stack.shrink(1);
+        if (stack.isEmpty()) inv.items.set(slot, ItemStack.EMPTY);
+        WorkstationManager.clearMarkerFromSlot(player);
+        player.level().playSound(null, player.blockPosition(),
+                SoundEvents.ANVIL_BREAK, SoundSource.BLOCKS, 1.0f, 1.0f);
+    }
+
+    private static Map<Integer, Integer> perSlot(ServerPlayer player) {
+        return DAMAGE_MAP.computeIfAbsent(player, k -> new HashMap<>());
+    }
+
+    // ── Block placement ─────────────────────────────────────────────────────
 
     @SubscribeEvent
     public static void onBlockPlaced(BlockEvent.EntityPlaceEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
         if (!event.getPlacedBlock().is(BlockTags.ANVIL)) return;
 
-        ResourceLocation itemId = ResourceLocation.parse("minecraft:anvil");
-        int damage = getDamageLevel(player, itemId);
+        int slot = resolveSlot(player);
+        if (slot < 0) return;
+        int damage = perSlot(player).getOrDefault(slot, 0);
         if (damage <= 0) return;
 
-        // Replace the placed block with the correct damaged variant.
         var newBlock = switch (damage) {
             case 1 -> Blocks.CHIPPED_ANVIL;
             case 2 -> Blocks.DAMAGED_ANVIL;
@@ -137,7 +193,7 @@ public class AnvilTracker {
         if (newBlock != null) {
             player.level().setBlock(event.getPos(), newBlock.defaultBlockState(), 3);
         }
-        resetDamage(player, itemId);
+        perSlot(player).remove(slot);
     }
 
     public static void clear() { DAMAGE_MAP.clear(); }

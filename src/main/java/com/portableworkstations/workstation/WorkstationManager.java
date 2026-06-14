@@ -2,6 +2,7 @@ package com.portableworkstations.workstation;
 
 import com.portableworkstations.PortableWorkstations;
 import com.portableworkstations.config.Config;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -12,6 +13,7 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.*;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.block.AbstractFurnaceBlock;
 import net.minecraft.world.level.block.Block;
@@ -38,6 +40,12 @@ public class WorkstationManager {
 
     /** Maps player → item ID used to open their current portable workstation. */
     private static final Map<ServerPlayer, ResourceLocation> PLAYER_WORKSTATION_ITEM = new WeakHashMap<>();
+    /** Maps player → inventory slot index of the item used to open the workstation. */
+    private static final Map<ServerPlayer, Integer> PLAYER_WORKSTATION_SLOT = new WeakHashMap<>();
+    /** Maps player → stack count at open time (used by AnvilTracker for slot resolution). */
+    private static final Map<ServerPlayer, Integer> PLAYER_WORKSTATION_COUNT = new WeakHashMap<>();
+    /** Transient UUID marker on the item, so indistinguishable stacks can be told apart. */
+    private static final Map<ServerPlayer, java.util.UUID> PLAYER_WORKSTATION_MARKER = new WeakHashMap<>();
 
     // ── Cache ───────────────────────────────────────────────────────────────
 
@@ -110,6 +118,61 @@ public class WorkstationManager {
         return PLAYER_WORKSTATION_ITEM.get(player);
     }
 
+    /** Returns the inventory slot the player clicked to open the workstation, or -1. */
+    public static int getPlayerWorkstationSlot(ServerPlayer player) {
+        return PLAYER_WORKSTATION_SLOT.getOrDefault(player, -1);
+    }
+
+    /** Returns the stored marker UUID, or null. */
+    @Nullable public static java.util.UUID getPlayerWorkstationMarker(ServerPlayer player) {
+        return PLAYER_WORKSTATION_MARKER.get(player);
+    }
+
+    /** Updates the tracked item ID (used by AnvilTracker after item upgrade). */
+    public static void overrideWorkstationItem(ServerPlayer player, ResourceLocation newId) {
+        PLAYER_WORKSTATION_ITEM.put(player, newId);
+    }
+
+    /** Clears the marker tag from the item in the tracked slot (called after operation). */
+    public static void clearMarkerFromSlot(ServerPlayer player) {
+        int slot = PLAYER_WORKSTATION_SLOT.getOrDefault(player, -1);
+        java.util.UUID marker = PLAYER_WORKSTATION_MARKER.remove(player);
+        if (marker == null || slot < 0 || slot >= player.getInventory().items.size()) return;
+        ItemStack stack = player.getInventory().items.get(slot);
+        if (!stack.isEmpty()) {
+            CustomData cd = stack.get(DataComponents.CUSTOM_DATA);
+            if (cd != null && marker.equals(cd.copyTag().getUUID("pw_marker"))) {
+                var updated = cd.update(t -> t.remove("pw_marker"));
+                if (updated.isEmpty()) stack.remove(DataComponents.CUSTOM_DATA);
+                else stack.set(DataComponents.CUSTOM_DATA, updated);
+                player.getInventory().items.set(slot, stack);
+            }
+        }
+    }
+
+    /** Updates the tracked slot index (used by AnvilTracker on slot migration). */
+    public static void updateWorkstationSlot(ServerPlayer player, int newSlot) {
+        if (newSlot >= 0) {
+            PLAYER_WORKSTATION_SLOT.put(player, newSlot);
+            PLAYER_WORKSTATION_COUNT.put(player, player.getInventory().items.get(newSlot).getCount());
+        }
+    }
+
+    /** Returns the expected stack count at open time, or 0. */
+    public static int getPlayerWorkstationCount(ServerPlayer player) {
+        return PLAYER_WORKSTATION_COUNT.getOrDefault(player, 0);
+    }
+
+    /** Finds the first inventory slot containing an item matching the given id. */
+    private static int findSlotForItem(ServerPlayer player, ResourceLocation id) {
+        var inv = player.getInventory().items;
+        for (int i = 0; i < inv.size(); i++) {
+            if (!inv.get(i).isEmpty() && BuiltInRegistries.ITEM.getKey(inv.get(i).getItem()).equals(id))
+                return i;
+        }
+        return -1;
+    }
+
     // ── Menu opening ────────────────────────────────────────────────────────
 
     /**
@@ -137,6 +200,22 @@ public class WorkstationManager {
         player.openMenu(provider);
         PORTABLE_MENUS.add(player.containerMenu);
         PLAYER_WORKSTATION_ITEM.put(player, itemId);
+        // Track which inventory slot was clicked (for AnvilTracker slot-precise damage)
+        int slot = findSlotForItem(player, itemId);
+        if (slot >= 0) {
+            PLAYER_WORKSTATION_SLOT.put(player, slot);
+            var stack = player.getInventory().items.get(slot);
+            PLAYER_WORKSTATION_COUNT.put(player, stack.getCount());
+            // Tag the exact stack with a transient UUID so indistinguishable
+            // stacks (same item, same count, same components) can be told apart.
+            if ("anvil".equals(menuType)) {
+                var marker = java.util.UUID.randomUUID();
+                var tag = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY);
+                stack.set(DataComponents.CUSTOM_DATA, tag.update(t -> t.putUUID("pw_marker", marker)));
+                player.getInventory().items.set(slot, stack); // ensure the change sticks
+                PLAYER_WORKSTATION_MARKER.put(player, marker);
+            }
+        }
     }
 
     /**
@@ -209,7 +288,11 @@ public class WorkstationManager {
      * processing is complete or the player logs out.
      */
     public static void cleanupPlayer(ServerPlayer player) {
+        clearMarkerFromSlot(player);
         PLAYER_WORKSTATION_ITEM.remove(player);
+        PLAYER_WORKSTATION_SLOT.remove(player);
+        PLAYER_WORKSTATION_COUNT.remove(player);
+        PLAYER_WORKSTATION_MARKER.remove(player);
         PORTABLE_MENUS.remove(player.containerMenu);
     }
 
