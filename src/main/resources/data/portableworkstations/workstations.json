@@ -1,0 +1,17 @@
+{
+  "comment": "Default workstation definitions for Portable Workstations.",
+  "comment2": "This file ships with the mod as a reference. Actual configuration",
+  "comment3": "is managed via the TOML config file (config/portableworkstations-common.toml).",
+  "workstations": [
+    { "block": "minecraft:crafting_table", "menu_type": "crafting" },
+    { "block": "minecraft:anvil", "menu_type": "anvil" },
+    { "block": "minecraft:smithing_table", "menu_type": "smithing" },
+    { "block": "minecraft:stonecutter", "menu_type": "stonecutter" },
+    { "block": "minecraft:grindstone", "menu_type": "grindstone" },
+    { "block": "minecraft:cartography_table", "menu_type": "cartography" },
+    { "block": "minecraft:loom", "menu_type": "loom" },
+    { "block": "minecraft:furnace", "menu_type": "furnace" },
+    { "block": "minecraft:blast_furnace", "menu_type": "blast_furnace" },
+    { "block": "minecraft:smoker", "menu_type": "smoker" }
+  ]
+}

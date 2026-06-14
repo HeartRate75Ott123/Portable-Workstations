@@ -1,0 +1,18 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "package": "com.portableworkstations.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "AbstractContainerScreenAccessor",
+    "AbstractFurnaceBlockEntityAccessor",
+    "CraftingMenuAccessor",
+    "MinecraftMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "overwrites": {
+    "requireAnnotations": true
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "_comment": "Portable Workstations - English (US) translations",
+
+  "itemGroup.portableworkstations": "Portable Workstations",
+
+  "portableworkstations.configuration.title": "Portable Workstations Config",
+  "portableworkstations.configuration.section.general.toml": "General",
+  "portableworkstations.configuration.section.general.toml.title": "General Settings",
+  "portableworkstations.configuration.section.workstations.toml": "Workstations",
+  "portableworkstations.configuration.section.workstations.toml.title": "Workstation Definitions",
+  "portableworkstations.configuration.enabled": "Mod Enabled",
+  "portableworkstations.configuration.definitions": "Workstation Definitions",
+
+  "container.crafting": "Portable Crafting Table",
+  "container.anvil": "Portable Anvil",
+  "container.smithing": "Portable Smithing Table",
+  "container.stonecutter": "Portable Stonecutter",
+  "container.grindstone": "Portable Grindstone",
+  "container.cartography": "Portable Cartography Table",
+  "container.loom": "Portable Loom",
+  "container.furnace": "Portable Furnace",
+  "container.blast_furnace": "Portable Blast Furnace",
+  "container.smoker": "Portable Smoker"
+}
