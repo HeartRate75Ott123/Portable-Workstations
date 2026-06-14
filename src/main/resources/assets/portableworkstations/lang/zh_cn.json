@@ -1,0 +1,29 @@
+{
+  "_comment": "便携工作站 — 简体中文翻译",
+
+  "itemGroup.portableworkstations": "便携工作站",
+
+  "portableworkstations.configuration.title": "便携工作站配置",
+  "portableworkstations.configuration.section.general.toml": "通用",
+  "portableworkstations.configuration.section.general.toml.title": "通用设置",
+  "portableworkstations.configuration.section.workstations.toml": "工作站",
+  "portableworkstations.configuration.section.workstations.toml.title": "工作站定义",
+  "portableworkstations.configuration.section.furnace_auto_detect.toml": "熔炉",
+  "portableworkstations.configuration.section.furnace_auto_detect.toml.title": "模组熔炉自动检测",
+  "portableworkstations.configuration.enabled": "启用模组",
+  "portableworkstations.configuration.definitions": "工作站定义",
+  "portableworkstations.configuration.furnace_auto_detect": "模组熔炉自动检测",
+  "portableworkstations.configuration.furnace_auto_detect.enabled": "启用自动检测",
+  "portableworkstations.configuration.furnace_auto_detect.default_type": "默认熔炉类型",
+
+  "portableworkstations.container.crafting": "便携工作台",
+  "portableworkstations.container.anvil": "便携铁砧",
+  "portableworkstations.container.smithing": "便携锻造台",
+  "portableworkstations.container.stonecutter": "便携切石机",
+  "portableworkstations.container.grindstone": "便携磨石",
+  "portableworkstations.container.cartography": "便携制图台",
+  "portableworkstations.container.loom": "便携织布机",
+  "portableworkstations.container.furnace": "便携熔炉",
+  "portableworkstations.container.blast_furnace": "便携高炉",
+  "portableworkstations.container.smoker": "便携烟熏炉"
+}

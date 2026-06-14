@@ -3,6 +3,7 @@ package com.portableworkstations;
 import com.portableworkstations.config.Config;
 import com.portableworkstations.handler.ContainerCloseHandler;
 import com.portableworkstations.handler.ServerPayloadHandler;
+import com.portableworkstations.workstation.AnvilTracker;
 import com.portableworkstations.workstation.PortableFurnaceManager;
 import com.portableworkstations.workstation.WorkstationManager;
 import org.slf4j.Logger;
@@ -30,11 +31,14 @@ public class PortableWorkstations {
 
         // Register network payloads on the mod bus
         modEventBus.addListener(ServerPayloadHandler::registerPackets);
+        // Rebuild workstation cache when config reloads
+        modEventBus.addListener(WorkstationManager::onConfigReload);
 
         // Register event handlers on the global game bus
         NeoForge.EVENT_BUS.register(ContainerCloseHandler.class);
         NeoForge.EVENT_BUS.register(WorkstationManager.class);
         NeoForge.EVENT_BUS.register(PortableFurnaceManager.class);
+        NeoForge.EVENT_BUS.register(AnvilTracker.class);
 
         LOGGER.info("Portable Workstations initialized.");
     }

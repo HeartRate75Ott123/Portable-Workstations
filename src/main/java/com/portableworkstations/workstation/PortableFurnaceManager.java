@@ -94,6 +94,8 @@ public class PortableFurnaceManager {
         float pendingXp = 0;
         /** Last known result-slot count — detects when the player takes items. */
         int lastResultCount = 0;
+        /** Last known input item identity — detects input changes mid-smelt. */
+        ItemStack lastInput = ItemStack.EMPTY;
 
         FurnaceState(ServerPlayer player, RecipeType<? extends AbstractCookingRecipe> recipeType) {
             this.playerUuid = player.getUUID();
@@ -133,6 +135,14 @@ public class PortableFurnaceManager {
             state.lastResultCount = 0;
             return;                     // nothing to do — skip recipe lookup
         }
+
+        // ── 0) Detect input change mid-smelt — reset progress & speed ───────
+        boolean inputChanged = !ItemStack.isSameItemSameComponents(input, state.lastInput);
+        if (inputChanged && (d.get(2) > 0 || d.get(3) > 0)) {
+            d.set(2, 0);   // reset cooking progress
+            d.set(3, 0);   // reset total time → will be re-queried from recipe
+        }
+        state.lastInput = input.copy();
 
         // ── 1) Decrement burn time ─────────────────────────────────────────
         if (burning) d.set(0, d.get(0) - 1);

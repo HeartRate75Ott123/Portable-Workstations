@@ -8,20 +8,21 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.MenuProvider;
 import net.minecraft.world.SimpleMenuProvider;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.*;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.block.AbstractFurnaceBlock;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.event.config.ModConfigEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 
 import javax.annotation.Nullable;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Core manager that reads workstation definitions from the config,
@@ -38,51 +39,53 @@ public class WorkstationManager {
     /** Maps player → item ID used to open their current portable workstation. */
     private static final Map<ServerPlayer, ResourceLocation> PLAYER_WORKSTATION_ITEM = new WeakHashMap<>();
 
-    // ── Config querying ─────────────────────────────────────────────────────
+    // ── Cache ───────────────────────────────────────────────────────────────
 
-    /**
-     * Returns {@code true} if the given item registry name matches a configured
-     * workstation entry OR is an auto-detected furnace block.
-     */
-    public static boolean isWorkstationItem(ResourceLocation itemId) {
-        // 1) Exact config match
-        String idStr = itemId.toString();
+    /** Lazily-built cache: blockId → menuType from config. Rebuilt on reload. */
+    private static volatile Map<ResourceLocation, String> WORKSTATION_CACHE = null;
+
+    private static Map<ResourceLocation, String> getCache() {
+        Map<ResourceLocation, String> c = WORKSTATION_CACHE;
+        if (c != null) return c;
+        c = new ConcurrentHashMap<>();
         for (String entry : Config.WORKSTATION_DEFINITIONS.get()) {
             int eq = entry.indexOf('=');
-            if (eq > 0 && entry.substring(0, eq).equals(idStr)) return true;
-        }
-        // 2) Auto-detected furnace (modded compat — Quark, Mythic Metals, etc.)
-        if (Config.FURNACE_AUTO_DETECT.getAsBoolean()) {
-            ItemStack stack = new ItemStack(BuiltInRegistries.ITEM.get(itemId));
-            Block block = Block.byItem(stack.getItem());
-            return block instanceof AbstractFurnaceBlock;
-        }
-        return false;
-    }
-
-    /**
-     * Looks up the menu-type string for a given block ID from the config.
-     * Falls back to the furnace auto-detect default for modded furnaces.
-     *
-     * @return the menu type (e.g. "crafting"), or {@code null} if not found
-     */
-    @Nullable
-    public static String getMenuType(String blockId) {
-        for (String entry : Config.WORKSTATION_DEFINITIONS.get()) {
-            int eq = entry.indexOf('=');
-            if (eq > 0 && entry.substring(0, eq).equals(blockId)) {
-                return entry.substring(eq + 1);
+            if (eq > 0) {
+                ResourceLocation id = ResourceLocation.tryParse(entry.substring(0, eq));
+                if (id != null) c.put(id, entry.substring(eq + 1));
             }
         }
-        // Fallback: check if it's an auto-detected furnace
-        if (Config.FURNACE_AUTO_DETECT.getAsBoolean()) {
-            ResourceLocation id = ResourceLocation.tryParse(blockId);
-            if (id != null) {
-                ItemStack stack = new ItemStack(BuiltInRegistries.ITEM.get(id));
-                Block block = Block.byItem(stack.getItem());
-                if (block instanceof AbstractFurnaceBlock) {
-                    return Config.FURNACE_DEFAULT_TYPE.get();
-                }
+        WORKSTATION_CACHE = c;
+        return c;
+    }
+
+    /** Called from the mod event bus when the config is reloaded. */
+    public static void onConfigReload(ModConfigEvent.Reloading event) {
+        if (event.getConfig().getSpec() == Config.SPEC) {
+            WORKSTATION_CACHE = null; // rebuild on next access
+        }
+    }
+
+    // ── Config querying ─────────────────────────────────────────────────────
+
+    public static boolean isWorkstationItem(ResourceLocation itemId) {
+        if (getCache().containsKey(itemId)) return true;
+        // Auto-detected furnace (modded compat)
+        return Config.FURNACE_AUTO_DETECT.getAsBoolean()
+            && Block.byItem(BuiltInRegistries.ITEM.get(itemId)) instanceof AbstractFurnaceBlock;
+    }
+
+    @Nullable
+    public static String getMenuType(String blockId) {
+        ResourceLocation id = ResourceLocation.tryParse(blockId);
+        if (id != null) {
+            String type = getCache().get(id);
+            if (type != null) return type;
+        }
+        // Fallback for auto-detected furnaces
+        if (Config.FURNACE_AUTO_DETECT.getAsBoolean() && id != null) {
+            if (Block.byItem(BuiltInRegistries.ITEM.get(id)) instanceof AbstractFurnaceBlock) {
+                return Config.FURNACE_DEFAULT_TYPE.get();
             }
         }
         return null;
@@ -170,8 +173,13 @@ public class WorkstationManager {
         }, title);
     }
 
+    /**
+     * Returns the GUI title for a portable workstation.
+     * Uses a mod-scoped key so it doesn't overwrite the vanilla
+     * {@code container.xxx} translations globally.
+     */
     private static Component getTitle(String menuType) {
-        return Component.translatable("container." + menuType);
+        return Component.translatable("portableworkstations.container." + menuType);
     }
 
     // ── Tracking ────────────────────────────────────────────────────────────
@@ -216,10 +224,18 @@ public class WorkstationManager {
         }
 
         // Check if the player still has the workstation item in their inventory
-        boolean stillHasItem = player.getInventory().hasAnyMatching(stack ->
-                !stack.isEmpty()
-                && BuiltInRegistries.ITEM.getKey(stack.getItem()).equals(expectedItem)
-        );
+        // (anvil variants normalised via AnvilTracker — chipped/damaged also match)
+        boolean stillHasItem = player.getInventory().hasAnyMatching(stack -> {
+            if (stack.isEmpty()) return false;
+            ResourceLocation id = BuiltInRegistries.ITEM.getKey(stack.getItem());
+            if (id.equals(expectedItem)) return true;
+            // Anvil family: tracker normalises all to minecraft:anvil
+            if (expectedItem.getPath().equals("anvil")) {
+                String p = id.getPath();
+                return p.equals("chipped_anvil") || p.equals("damaged_anvil");
+            }
+            return false;
+        });
 
         if (!stillHasItem) {
             player.closeContainer();

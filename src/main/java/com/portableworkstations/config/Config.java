@@ -94,6 +94,8 @@ public class Config {
         return List.of(
                 "minecraft:crafting_table=crafting",
                 "minecraft:anvil=anvil",
+                "minecraft:chipped_anvil=anvil",
+                "minecraft:damaged_anvil=anvil",
                 "minecraft:smithing_table=smithing",
                 "minecraft:stonecutter=stonecutter",
                 "minecraft:grindstone=grindstone",
