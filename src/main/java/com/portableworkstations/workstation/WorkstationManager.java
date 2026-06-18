@@ -19,6 +19,7 @@ import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.block.AbstractFurnaceBlock;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.event.config.ModConfigEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
@@ -88,13 +89,20 @@ public class WorkstationManager {
         return p.equals("anvil") || p.equals("chipped_anvil") || p.equals("damaged_anvil");
     }
 
+    /** Returns true if the block behaves like a furnace (has LIT property). */
+    private static boolean isFurnaceBlock(Block block) {
+        return block instanceof AbstractFurnaceBlock
+            || block.defaultBlockState().hasProperty(BlockStateProperties.LIT);
+    }
+
     public static boolean isWorkstationItem(ResourceLocation itemId) {
         if (getCache().containsKey(itemId)) return true;
-        // Auto-detect anvil variants (chipped/damaged) even without config entries
+        // Auto-detect anvil variants
         if (isAnvilVariant(itemId)) return true;
-        // Auto-detect modded furnaces (Quark, More Furnaces, etc.)
-        return Config.FURNACE_AUTO_DETECT.getAsBoolean()
-            && Block.byItem(BuiltInRegistries.ITEM.get(itemId)) instanceof AbstractFurnaceBlock;
+        // Auto-detect furnaces (vanilla, Quark, Iron Furnaces, etc.)
+        if (!Config.FURNACE_AUTO_DETECT.getAsBoolean()) return false;
+        Block block = Block.byItem(BuiltInRegistries.ITEM.get(itemId));
+        return block != Blocks.AIR && isFurnaceBlock(block);
     }
 
     @Nullable
@@ -108,7 +116,8 @@ public class WorkstationManager {
         }
         // Fallback for auto-detected furnaces
         if (Config.FURNACE_AUTO_DETECT.getAsBoolean() && id != null) {
-            if (Block.byItem(BuiltInRegistries.ITEM.get(id)) instanceof AbstractFurnaceBlock) {
+            Block block = Block.byItem(BuiltInRegistries.ITEM.get(id));
+            if (block != Blocks.AIR && isFurnaceBlock(block)) {
                 return Config.FURNACE_DEFAULT_TYPE.get();
             }
         }
