@@ -249,12 +249,13 @@ public class WorkstationManager {
         boolean isAnvil = "anvil".equals(menuType);
 
         if (isAnvil) {
-        } else {
             UUID marker = markStack(stack);
             player.getInventory().items.set(slot, stack);
             PLAYER_WORKSTATION_MARKER.put(player, marker);
             PLAYER_WORKSTATION_SLOT.put(player, slot);
             PLAYER_WORKSTATION_COUNT.put(player, stack.getCount());
+            AnvilTracker.initStage(player, marker, stack);
+        } else {
             PLAYER_WORKSTATION_SLOT.put(player, slot);
             PLAYER_WORKSTATION_COUNT.put(player, stack.getCount());
         }
