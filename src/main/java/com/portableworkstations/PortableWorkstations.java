@@ -51,7 +51,7 @@ public class PortableWorkstations {
         if (!Files.exists(configPath)) return;
         try {
             String content = Files.readString(configPath);
-            if (content.contains("[furnace_auto_detect]") || content.contains("entries = [")) {
+            if (!content.contains("furnace_detection") || !content.contains("overrides")) {
                 Files.delete(configPath);
                 LOGGER.info("Deleted outdated config; will regenerate with latest defaults.");
             }
