@@ -22,15 +22,16 @@ public class PortableWorkstations {
     public static final Logger LOGGER = LogUtils.getLogger();
 
     public PortableWorkstations(IEventBus modEventBus, ModContainer modContainer) {
-        modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
+        // Delete old config BEFORE registering spec, so fresh defaults apply
+        nukeOldConfig();
 
+        modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
         modEventBus.addListener(ServerPayloadHandler::registerPackets);
         modEventBus.addListener(WorkstationManager::onConfigReload);
 
         modEventBus.addListener(net.neoforged.fml.event.config.ModConfigEvent.Loading.class, event -> {
             if (event.getConfig().getSpec() != Config.SPEC) return;
             PortableFurnaceManager.loadSpeedsFromConfig();
-            migrateConfigIfNeeded();
         });
 
         NeoForge.EVENT_BUS.register(ContainerCloseHandler.class);
@@ -41,22 +42,18 @@ public class PortableWorkstations {
         LOGGER.info("Portable Workstations initialized.");
     }
 
-    /** One-time migration: deletes old-format config so NeoForge writes the latest layout. */
-    private static boolean migrationDone = false;
-    private synchronized static void migrateConfigIfNeeded() {
-        if (migrationDone) return;
-        migrationDone = true;
-        Path configPath = net.neoforged.fml.loading.FMLPaths.CONFIGDIR.get()
-                .resolve("portableworkstations-common.toml");
-        if (!Files.exists(configPath)) return;
+    private static void nukeOldConfig() {
         try {
-            String content = Files.readString(configPath);
-            if (!content.contains("furnace_detection") || !content.contains("overrides")) {
-                Files.delete(configPath);
-                LOGGER.info("Deleted outdated config; will regenerate with latest defaults.");
+            Path p = net.neoforged.fml.loading.FMLPaths.CONFIGDIR.get()
+                    .resolve("portableworkstations-common.toml");
+            if (!Files.exists(p)) return;
+            String c = Files.readString(p);
+            if (!c.contains("furnace_detection") && !c.contains("overrides = [")) {
+                Files.delete(p);
+                LOGGER.info("Deleted outdated config; fresh defaults generated.");
             }
         } catch (Exception e) {
-            LOGGER.warn("Config migration check failed: {}", e.getMessage());
+            LOGGER.warn("Migration check: {}", e.getMessage());
         }
     }
 }
