@@ -31,17 +31,38 @@ public class PortableFurnaceManager {
 
     private static final Map<UUID, FurnaceState> ACTIVE_FURNACES = new HashMap<>();
 
-    /** Item ID → cooking speed multiplier. Registered by mods like Iron Furnaces. */
+    /** Item ID → cooking speed multiplier. Populated from known mods + config + API. */
     private static final Map<String, Integer> FURNACE_SPEEDS = new HashMap<>();
+
+    static {
+        // Iron Furnaces tiers (based on their default speed configs)
+        registerFurnaceSpeed("ironfurnaces:copper_furnace", 2);
+        registerFurnaceSpeed("ironfurnaces:iron_furnace", 2);
+        registerFurnaceSpeed("ironfurnaces:silver_furnace", 3);
+        registerFurnaceSpeed("ironfurnaces:gold_furnace", 4);
+        registerFurnaceSpeed("ironfurnaces:diamond_furnace", 5);
+        registerFurnaceSpeed("ironfurnaces:emerald_furnace", 6);
+        registerFurnaceSpeed("ironfurnaces:obsidian_furnace", 7);
+        registerFurnaceSpeed("ironfurnaces:crystal_furnace", 8);
+        registerFurnaceSpeed("ironfurnaces:netherite_furnace", 9);
+        registerFurnaceSpeed("ironfurnaces:million_furnace", 10);
+        // BetterFurnaces
+        registerFurnaceSpeed("betterfurnacesreforged:iron_furnace", 2);
+        registerFurnaceSpeed("betterfurnacesreforged:gold_furnace", 3);
+        registerFurnaceSpeed("betterfurnacesreforged:diamond_furnace", 4);
+        // Allthemodium
+        registerFurnaceSpeed("ironfurnaces:allthemodium_furnace", 11);
+        registerFurnaceSpeed("ironfurnaces:vibranium_furnace", 12);
+        registerFurnaceSpeed("ironfurnaces:unobtainium_furnace", 13);
+    }
 
     /** Register a cooking speed multiplier (default 1 = vanilla) for a furnace item. */
     public static void registerFurnaceSpeed(String itemId, int speed) {
         FURNACE_SPEEDS.put(itemId, Math.max(1, speed));
     }
 
-    /** Load speed overrides from config (called on reload). */
+    /** Load speed overrides from config (called on reload). Overlays on hardcoded defaults. */
     public static void loadSpeedsFromConfig() {
-        FURNACE_SPEEDS.clear();
         for (String entry : com.portableworkstations.config.Config.FURNACE_SPEEDS_CONFIG.get()) {
             int eq = entry.indexOf('=');
             if (eq > 0) try {
