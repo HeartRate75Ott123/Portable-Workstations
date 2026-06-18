@@ -16,6 +16,12 @@
   "portableworkstations.configuration.furnace_auto_detect.enabled": "启用自动检测",
   "portableworkstations.configuration.furnace_auto_detect.default_type": "默认熔炉类型",
 
+  "portableworkstations.configuration.section.furnace_speeds.toml": "熔炉速度",
+  "portableworkstations.configuration.section.furnace_speeds.toml.title": "熔炉速度覆盖",
+  "portableworkstations.configuration.furnace_speeds": "熔炉速度覆盖",
+  "portableworkstations.configuration.furnace_speeds.entries": "速度条目",
+
+  "portableworkstations.configuration.config_version": "配置版本",
 
   "portableworkstations.container.crafting": "便携工作台",
   "portableworkstations.container.anvil": "便携铁砧",

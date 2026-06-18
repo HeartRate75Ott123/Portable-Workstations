@@ -16,6 +16,12 @@
   "portableworkstations.configuration.furnace_auto_detect.enabled": "Auto-Detect Furnace",
   "portableworkstations.configuration.furnace_auto_detect.default_type": "Default Furnace Type",
 
+  "portableworkstations.configuration.section.furnace_speeds.toml": "Furnace Speeds",
+  "portableworkstations.configuration.section.furnace_speeds.toml.title": "Furnace Speed Overrides",
+  "portableworkstations.configuration.furnace_speeds": "Furnace Speed Overrides",
+  "portableworkstations.configuration.furnace_speeds.entries": "Speed Entries",
+
+  "portableworkstations.configuration.config_version": "Config Version",
 
   "portableworkstations.container.crafting": "Crafting",
   "portableworkstations.container.anvil": "Anvil",
