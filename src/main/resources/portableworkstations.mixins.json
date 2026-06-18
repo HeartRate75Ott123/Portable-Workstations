@@ -8,7 +8,8 @@
     "AbstractContainerScreenMixin",
     "AbstractFurnaceBlockEntityAccessor",
     "CraftingMenuAccessor",
-    "MinecraftMixin"
+    "MinecraftMixin",
+    "MouseHandlerMixin"
   ],
   "injectors": {
     "defaultRequire": 1
