@@ -6,7 +6,6 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.Style;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.server.level.ServerPlayer;
@@ -50,7 +49,6 @@ public class WorkstationManager {
     /** Transient UUID marker on the item, so indistinguishable stacks can be told apart. */
     private static final Map<ServerPlayer, java.util.UUID> PLAYER_WORKSTATION_MARKER = new WeakHashMap<>();
     /** For split anvil tracking: slot that holds the main stack */
-    private static final Map<ServerPlayer, Integer> PLAYER_WORKSTATION_ORIGINAL_SLOT = new WeakHashMap<>();
     /** Menu type of the currently tracked workstation. */
     private static final Map<ServerPlayer, String> PLAYER_MENU_TYPE = new WeakHashMap<>();
 
@@ -163,15 +161,6 @@ public class WorkstationManager {
         stack.remove(DataComponents.CUSTOM_NAME);
     }
 
-    public static int countTrackedAnvils(ServerPlayer player) {
-        int n = 0;
-        for (var stack : player.getInventory().items) {
-            if (stack.isEmpty()) continue;
-            var cd = stack.get(DataComponents.CUSTOM_DATA);
-            if (cd != null && cd.copyTag().hasUUID("pw_marker")) n++;
-        }
-        return n;
-    }
 
     /** Clears the marker tag from the item in the tracked slot (called after operation). */
     public static void clearMarkerFromSlot(ServerPlayer player) {
