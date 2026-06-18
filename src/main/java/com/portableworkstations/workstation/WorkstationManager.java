@@ -7,6 +7,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.MenuProvider;
 import net.minecraft.world.SimpleMenuProvider;
@@ -136,6 +137,20 @@ public class WorkstationManager {
         PLAYER_WORKSTATION_ITEM.put(player, newId);
     }
 
+    /** Maximum portable anvils in inventory (prevents excessive slot usage from splitting). */
+    private static final int MAX_PORTABLE_ANVILS = 2;
+
+    /** Counts items with a pw_marker UUID in the player's inventory. */
+    private static int countTrackedAnvils(ServerPlayer player) {
+        int n = 0;
+        for (var stack : player.getInventory().items) {
+            if (stack.isEmpty()) continue;
+            var cd = stack.get(DataComponents.CUSTOM_DATA);
+            if (cd != null && cd.copyTag().hasUUID("pw_marker")) n++;
+        }
+        return n;
+    }
+
     /** Splits 1 from anvil stack → tracked slot. Reuses existing UUID marker if present. */
     public static int splitAnvilForTracking(ServerPlayer player, int sourceSlot) {
         var inv = player.getInventory().items;
@@ -147,12 +162,20 @@ public class WorkstationManager {
         java.util.UUID marker = existing != null && existing.copyTag().hasUUID("pw_marker")
                 ? existing.copyTag().getUUID("pw_marker")
                 : java.util.UUID.randomUUID();
+
+        // Enforce max portable anvil limit (only for NEW tracking, not existing ones)
+        if (existing == null || !existing.copyTag().hasUUID("pw_marker")) {
+            if (countTrackedAnvils(player) >= MAX_PORTABLE_ANVILS) return -1;
+        }
+
         var tag = new CompoundTag();
         tag.putUUID("pw_marker", marker);
         var data = CustomData.of(tag);
+        var displayName = Component.translatable("portableworkstations.anvil.tracked");
 
         if (stack.getCount() == 1) {
             stack.set(DataComponents.CUSTOM_DATA, data);
+            stack.set(DataComponents.CUSTOM_NAME, displayName);
             inv.set(sourceSlot, stack);
             PLAYER_WORKSTATION_MARKER.put(player, marker);
             return sourceSlot;
@@ -164,6 +187,7 @@ public class WorkstationManager {
             if (inv.get(i).isEmpty()) {
                 var tracked = new ItemStack(stack.getItem(), 1);
                 tracked.set(DataComponents.CUSTOM_DATA, data);
+                tracked.set(DataComponents.CUSTOM_NAME, displayName);
                 inv.set(i, tracked);
                 PLAYER_WORKSTATION_MARKER.put(player, marker);
                 return i;
@@ -283,16 +307,17 @@ public class WorkstationManager {
             var stack = player.getInventory().items.get(slot);
             PLAYER_WORKSTATION_COUNT.put(player, stack.getCount());
             // Split 1 from the anvil stack into a dedicated tracked slot.
-            // The tracked item gets visual upgrades; break consumes it.
-            // The main stack stays untouched in its original slot.
             if ("anvil".equals(menuType)) {
                 int trackedSlot = splitAnvilForTracking(player, slot);
+                if (trackedSlot == -1) {
+                    // Limit reached — close the just-opened menu, don't track
+                    player.closeContainer();
+                    return;
+                }
                 if (trackedSlot != slot) {
                     PLAYER_WORKSTATION_ORIGINAL_SLOT.put(player, slot); // main stack
                     PLAYER_WORKSTATION_SLOT.put(player, trackedSlot);   // tracked item
                     PLAYER_WORKSTATION_COUNT.put(player, 1);
-                } else {
-                    // Already a single item — normal tracking applies
                 }
             }
         }
