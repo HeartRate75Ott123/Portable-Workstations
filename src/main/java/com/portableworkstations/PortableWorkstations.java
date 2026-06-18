@@ -72,7 +72,19 @@ public class PortableWorkstations {
                 }
             }
             if (!userDefs.isEmpty()
-                    && !userDefs.equals(Config.defaultWorkstations())) {
+                    && !userDefs.equals(List.of(
+                        "minecraft:crafting_table=crafting",
+                        "minecraft:anvil=anvil",
+                        "minecraft:chipped_anvil=anvil",
+                        "minecraft:damaged_anvil=anvil",
+                        "minecraft:smithing_table=smithing",
+                        "minecraft:stonecutter=stonecutter",
+                        "minecraft:grindstone=grindstone",
+                        "minecraft:cartography_table=cartography",
+                        "minecraft:loom=loom",
+                        "minecraft:furnace=furnace",
+                        "minecraft:blast_furnace=blast_furnace",
+                        "minecraft:smoker=smoker"))) {
                 savedDefinitions = userDefs;
                 LOGGER.info("Preserved {} custom workstation definition(s).", userDefs.size());
             }
