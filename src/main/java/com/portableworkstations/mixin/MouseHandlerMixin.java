@@ -16,12 +16,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(MouseHandler.class)
 public class MouseHandlerMixin {
 
-    @Shadow private boolean isGrabbing;
+    @Shadow private boolean mouseGrabbed;
 
     @Inject(method = "grabMouse", at = @At("HEAD"), cancellable = true)
     private void onGrabMouse(CallbackInfo ci) {
-        if (!CursorState.pendingHoverClear || this.isGrabbing) return;
-        this.isGrabbing = true;
+        if (!CursorState.pendingHoverClear || this.mouseGrabbed) return;
+        this.mouseGrabbed = true;
         ci.cancel();
     }
 }
