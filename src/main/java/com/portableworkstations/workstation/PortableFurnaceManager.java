@@ -84,9 +84,8 @@ public class PortableFurnaceManager {
         } else {
             state.recipeType = recipeType;
         }
-        // Look up speed multiplier for this furnace item
-        Integer s = FURNACE_SPEEDS.get(blockId.toString());
-        if (s != null) state.speed = s;
+        // Look up speed multiplier for this furnace item; reset to 1 if unknown
+        state.speed = FURNACE_SPEEDS.getOrDefault(blockId.toString(), 1);
         return state;
     }
 
