@@ -6,14 +6,10 @@ import java.util.List;
 import java.util.Set;
 
 public class Config {
-    /** Updated automatically from mod_version in gradle.properties via PortableWorkstations constructor. */
-    public static int CURRENT_CONFIG_VERSION = 0;
-
     private static final ModConfigSpec.Builder BUILDER = new ModConfigSpec.Builder();
 
     // ── General ──────────────────────────────────────────────────────────────
     public static final ModConfigSpec.BooleanValue ENABLED;
-    public static final ModConfigSpec.IntValue CONFIG_VERSION;
 
     // ── Workstation Definitions ──────────────────────────────────────────────
     public static final ModConfigSpec.ConfigValue<List<? extends String>> WORKSTATION_DEFINITIONS;
@@ -21,101 +17,57 @@ public class Config {
     // ── Modded furnace auto-detection ────────────────────────────────────────
     public static final ModConfigSpec.BooleanValue FURNACE_AUTO_DETECT;
     public static final ModConfigSpec.ConfigValue<String> FURNACE_DEFAULT_TYPE;
+    /** Speed overrides: "block_id=speed" entries. */
     public static final ModConfigSpec.ConfigValue<List<? extends String>> FURNACE_SPEEDS_CONFIG;
 
-    /** Subset of menu types valid for the furnace_default_type field. */
     private static final Set<String> KNOWN_MENU_TYPES_CONTAINS_FURNACE = Set.of("furnace", "blast_furnace", "smoker");
 
     static {
-        BUILDER.comment("General settings").push("general");
-
-        CONFIG_VERSION = BUILDER
-                .comment("Internal config version. Do not modify.")
-                .defineInRange("config_version", CURRENT_CONFIG_VERSION, 1, 100);
-
+        BUILDER.comment("Master mod switch.").push("general");
         ENABLED = BUILDER
-                .comment(
-                        "Set to false to disable the entire Portable Workstations mod.",
-                        "When disabled, right-clicking workstation items in the inventory",
-                        "will behave as normal (stack splitting)."
-                )
+                .comment("Set to false to disable the entire mod.")
                 .define("enabled", true);
-
         BUILDER.pop();
 
-        // ── Workstation definitions ─────────────────────────────────────────
-
-        BUILDER.comment("Workstation definitions").push("workstations");
-
+        BUILDER.comment("Workstation block → menu type mappings.").push("workstations");
         WORKSTATION_DEFINITIONS = BUILDER
                 .comment(
-                        "List of supported workstation items in the format \"block_id=menu_type\".",
+                        "List of \"block_id=menu_type\" entries.",
                         "",
-                        "Available menu_type values:",
-                        "  crafting      — 3×3 crafting table",
-                        "  anvil         — Anvil (rename & repair)",
-                        "  smithing      — Smithing table (trim & upgrade)",
-                        "  stonecutter   — Stonecutter",
-                        "  grindstone    — Grindstone (disenchant & repair)",
-                        "  cartography   — Cartography table",
-                        "  loom          — Loom (banner patterns)",
-                        "  furnace       — Furnace",
-                        "  blast_furnace — Blast furnace",
-                        "  smoker        — Smoker",
+                        "Available menu types: crafting, anvil, smithing, stonecutter,",
+                        "grindstone, cartography, loom, furnace, blast_furnace, smoker",
                         "",
-                        "Example: \"minecraft:anvil=anvil\"",
-                        "         \"minecraft:furnace=furnace\""
+                        "Example: \"minecraft:anvil=anvil\""
                 )
                 .defineListAllowEmpty("definitions", Config::defaultWorkstations, Config::validateWorkstationEntry);
-
         BUILDER.pop();
-
-        // ── Furnace auto-detection ──────────────────────────────────────────
 
         BUILDER.comment(
                 "Modded furnace auto-detection.",
-                "When enabled, any item whose corresponding block extends",
-                "AbstractFurnaceBlock (e.g. Quark variants, Mythic Metals furnaces)",
-                "will be treated as a portable workstation without needing a",
-                "manual config entry."
-        ).push("furnace_auto_detect");
-
+                "When enabled, any item whose corresponding block has the LIT",
+                "property (Quark, Iron Furnaces, etc.) can be used as a portable",
+                "furnace without a manual config entry."
+        ).push("furnace_detection");
         FURNACE_AUTO_DETECT = BUILDER
-                .comment("Set to false to disable auto-detection of modded furnaces.")
-                .define("enabled", true);
-
+                .comment("Enable auto-detection of modded furnace blocks.")
+                .define("auto_detect", true);
         FURNACE_DEFAULT_TYPE = BUILDER
-                .comment(
-                        "Which menu_type to use for auto-detected furnaces.",
-                        "Default: \"furnace\" — opens a regular FurnaceMenu with RecipeType.SMELTING.",
-                        "Other options: blast_furnace, smoker"
-                )
-                .define("default_type", "furnace", s -> s instanceof String type && KNOWN_MENU_TYPES_CONTAINS_FURNACE.contains(type));
-
+                .comment("Menu type for auto-detected furnaces: furnace, blast_furnace, smoker.")
+                .define("default_menu", "furnace",
+                        s -> s instanceof String t && KNOWN_MENU_TYPES_CONTAINS_FURNACE.contains(t));
         BUILDER.pop();
 
-        // ── Furnace speed overrides ───────────────────────────────────────────
-
         BUILDER.comment(
-                "Furnace cooking speed overrides.",
-                "Format: \"block_id=speed\" where speed is an integer multiplier.",
-                "Speed 2 means twice as fast as vanilla furnace, speed 3 = 3x, etc.",
-                "Default speed is 1 (vanilla).",
-                "",
-                "Example: \"ironfurnaces:gold_furnace=2\"",
-                "         \"mythicmetals:mythic_furnace=3\""
+                "Cooking speed overrides for modded furnaces.",
+                "Format: \"block_id=speed\" (speed is an integer; 2 = 2x vanilla)."
         ).push("furnace_speeds");
-
         FURNACE_SPEEDS_CONFIG = BUILDER
-                .comment("List of \"block_id=speed\" entries.")
-                .defineListAllowEmpty("entries", List::of, Config::validateSpeedEntry);
-
+                .comment("List of \"block_id=speed\" overrides.")
+                .defineListAllowEmpty("overrides", List::of, Config::validateSpeedEntry);
         BUILDER.pop();
     }
 
     public static final ModConfigSpec SPEC = BUILDER.build();
-
-    // ── Default values ──────────────────────────────────────────────────────
 
     private static List<String> defaultWorkstations() {
         return List.of(
@@ -134,7 +86,6 @@ public class Config {
         );
     }
 
-    /** Known menu types (used for validation and as the switch cases). */
     private static final Set<String> KNOWN_MENU_TYPES = Set.of(
             "crafting", "anvil", "smithing", "stonecutter",
             "grindstone", "cartography", "loom",
@@ -145,15 +96,12 @@ public class Config {
         if (!(obj instanceof String entry)) return false;
         int eq = entry.indexOf('=');
         if (eq <= 0 || eq >= entry.length() - 1) return false;
-
         String blockId = entry.substring(0, eq);
         String menuType = entry.substring(eq + 1);
-
         if (net.minecraft.resources.ResourceLocation.tryParse(blockId) == null) return false;
         return KNOWN_MENU_TYPES.contains(menuType);
     }
 
-    /** Validates a speed entry: must be "resource_location=speed" where speed ≥ 1. */
     private static boolean validateSpeedEntry(Object obj) {
         if (!(obj instanceof String entry)) return false;
         int eq = entry.indexOf('=');
