@@ -31,6 +31,14 @@ public class PortableFurnaceManager {
 
     private static final Map<UUID, FurnaceState> ACTIVE_FURNACES = new HashMap<>();
 
+    /** Item ID → cooking speed multiplier. Registered by mods like Iron Furnaces. */
+    private static final Map<String, Float> FURNACE_SPEEDS = new HashMap<>();
+
+    /** Register a cooking speed multiplier (default 1 = vanilla) for a furnace item. */
+    public static void registerFurnaceSpeed(String itemId, int speed) {
+        FURNACE_SPEEDS.put(itemId, Math.max(1, speed));
+    }
+
     // ── Public API ──────────────────────────────────────────────────────────
 
     public static FurnaceState startOrGet(ServerPlayer player, ResourceLocation blockId,
@@ -41,8 +49,11 @@ public class PortableFurnaceManager {
             state = new FurnaceState(player, recipeType);
             ACTIVE_FURNACES.put(uuid, state);
         } else {
-            state.recipeType = recipeType; // update recipe type to current menu
+            state.recipeType = recipeType;
         }
+        // Look up speed multiplier for this furnace item
+        Integer s = FURNACE_SPEEDS.get(blockId.toString());
+        if (s != null) state.speed = s;
         return state;
     }
 
@@ -96,6 +107,9 @@ public class PortableFurnaceManager {
         public final SimpleContainer container = new SimpleContainer(3);
         public final SimpleContainerData data = new SimpleContainerData(4);
         public final UUID playerUuid;
+
+        /** Cooking speed multiplier (1 = vanilla). Iron Furnaces registers e.g. 2 for gold. */
+        int speed = 1;
 
         /** Accumulated experience from completed smelts not yet awarded. */
         float pendingXp = 0;
@@ -180,7 +194,7 @@ public class PortableFurnaceManager {
         // ── 4) Cooking ─────────────────────────────────────────────────────
         if (burning && haveWork) {
             if (d.get(3) == 0) d.set(3, recipe.value().getCookingTime());
-            d.set(2, d.get(2) + 1);
+            d.set(2, d.get(2) + state.speed);
 
             if (d.get(2) >= d.get(3)) {
                 completeSmelt(c, recipe, level);
