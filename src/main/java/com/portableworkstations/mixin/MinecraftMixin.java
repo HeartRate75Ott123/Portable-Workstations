@@ -1,7 +1,9 @@
 package com.portableworkstations.mixin;
 
+import com.portableworkstations.mixin.AbstractContainerScreenAccessor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import org.lwjgl.glfw.GLFW;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -9,17 +11,6 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/**
- * Preserves the mouse cursor position across screen transitions (close → open).
- * <p>
- * Without this mixin, every {@code setScreen(newScreen)} call centers the cursor
- * because {@code MouseHandler.grabMouse()} calls
- * {@code GLFW.glfwSetCursorPos(window, width/2, height/2)}.
- * <p>
- * This mixin saves the cursor position just before the old screen is removed
- * (HEAD of {@code setScreen}) and restores it after the new screen is fully
- * initialised (TAIL of {@code setScreen}).
- */
 @Mixin(Minecraft.class)
 public class MinecraftMixin {
 
@@ -52,6 +43,10 @@ public class MinecraftMixin {
             GLFW.glfwSetCursorPos(window,
                     portableworkstations$savedCursorX,
                     portableworkstations$savedCursorY);
+            // Clear hovered slot to prevent center-position highlight for one frame
+            if (newScreen instanceof AbstractContainerScreen<?> cs) {
+                ((AbstractContainerScreenAccessor) cs).portableworkstations$setHoveredSlot(null);
+            }
             portableworkstations$shouldRestore = false;
         }
     }
