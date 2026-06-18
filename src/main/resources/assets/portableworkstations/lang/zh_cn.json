@@ -9,7 +9,9 @@
   "portableworkstations.configuration.section.workstations.toml": "工作站",
   "portableworkstations.configuration.section.workstations.toml.title": "工作站列表",
   "portableworkstations.configuration.general.enabled": "启用",
+  "portableworkstations.configuration.general.enabled.tooltip": "设为 false 以完全禁用本模组。",
   "portableworkstations.configuration.workstations.definitions": "工作站列表",
+  "portableworkstations.configuration.workstations.definitions.tooltip": "\"方块ID=菜单类型\" 条目列表。可用类型：crafting(工作台), anvil(铁砧), smithing(锻造台), stonecutter(切石机), grindstone(磨石), cartography(制图台), loom(织布机), furnace(熔炉), blast_furnace(高炉), smoker(烟熏炉)。",
   "portableworkstations.configuration.enabled": "启用",
   "portableworkstations.configuration.definitions": "工作站列表",
   "portableworkstations.configuration.section.furnace_auto_detect.toml": "熔炉检测",
@@ -18,7 +20,9 @@
   "portableworkstations.configuration.section.furnace_detection.toml.title": "熔炉检测",
   "portableworkstations.configuration.furnace_detection": "熔炉检测",
   "portableworkstations.configuration.furnace_detection.auto_detect": "自动检测",
+  "portableworkstations.configuration.furnace_detection.auto_detect.tooltip": "启用模组熔炉方块自动检测。",
   "portableworkstations.configuration.furnace_detection.default_menu": "默认菜单",
+  "portableworkstations.configuration.furnace_detection.default_menu.tooltip": "自动检测到的熔炉打开的菜单类型：furnace(熔炉), blast_furnace(高炉), smoker(烟熏炉)。",
   "portableworkstations.configuration.furnace_detection.enabled": "自动检测",
   "portableworkstations.configuration.furnace_detection.default_type": "默认菜单",
 
@@ -27,6 +31,7 @@
   "portableworkstations.configuration.furnace_speeds": "速度覆盖",
   "portableworkstations.configuration.furnace_speeds.entries": "速度覆盖",
   "portableworkstations.configuration.furnace_speeds.overrides": "速度覆盖",
+  "portableworkstations.configuration.furnace_speeds.overrides.tooltip": "\"方块ID=速度\" 列表。速度整数倍率（2 = 2倍原版速度）。",
 
   "portableworkstations.configuration.config_version": "配置版本",
 

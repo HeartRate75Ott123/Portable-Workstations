@@ -9,7 +9,9 @@
   "portableworkstations.configuration.section.workstations.toml": "Workstations",
   "portableworkstations.configuration.section.workstations.toml.title": "Workstation List",
   "portableworkstations.configuration.general.enabled": "Enabled",
+  "portableworkstations.configuration.general.enabled.tooltip": "Set to false to disable the entire mod.",
   "portableworkstations.configuration.workstations.definitions": "Workstation List",
+  "portableworkstations.configuration.workstations.definitions.tooltip": "List of \"block_id=menu_type\" entries. Available types: crafting, anvil, smithing, stonecutter, grindstone, cartography, loom, furnace, blast_furnace, smoker.",
   "portableworkstations.configuration.enabled": "Enabled",
   "portableworkstations.configuration.definitions": "Workstation List",
   "portableworkstations.configuration.section.furnace_auto_detect.toml": "Furnace Detection",
@@ -18,7 +20,9 @@
   "portableworkstations.configuration.section.furnace_detection.toml.title": "Furnace Detection",
   "portableworkstations.configuration.furnace_detection": "Furnace Detection",
   "portableworkstations.configuration.furnace_detection.auto_detect": "Auto-Detect",
+  "portableworkstations.configuration.furnace_detection.auto_detect.tooltip": "Enable auto-detection of modded furnace blocks.",
   "portableworkstations.configuration.furnace_detection.default_menu": "Default Menu",
+  "portableworkstations.configuration.furnace_detection.default_menu.tooltip": "Menu type for auto-detected furnaces: furnace, blast_furnace, smoker.",
   "portableworkstations.configuration.furnace_detection.enabled": "Auto-Detect",
   "portableworkstations.configuration.furnace_detection.default_type": "Default Menu",
 
@@ -27,6 +31,7 @@
   "portableworkstations.configuration.furnace_speeds": "Speed Overrides",
   "portableworkstations.configuration.furnace_speeds.entries": "Speed Overrides",
   "portableworkstations.configuration.furnace_speeds.overrides": "Speed Overrides",
+  "portableworkstations.configuration.furnace_speeds.overrides.tooltip": "List of \"block_id=speed\" entries where speed is an integer multiplier (2 = 2× vanilla).",
 
   "portableworkstations.configuration.config_version": "Config Version",
 
