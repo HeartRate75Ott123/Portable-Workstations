@@ -160,14 +160,18 @@ public class WorkstationManager {
 
         // Reuse existing marker if the item already has one
         var existing = stack.get(DataComponents.CUSTOM_DATA);
-        java.util.UUID marker = existing != null && existing.copyTag().hasUUID("pw_marker")
-                ? existing.copyTag().getUUID("pw_marker")
+        boolean hasMarker = existing != null && existing.copyTag().hasUUID("pw_marker");
+        java.util.UUID marker = hasMarker ? existing.copyTag().getUUID("pw_marker")
                 : java.util.UUID.randomUUID();
 
-        // Enforce max portable anvil limit (only for NEW tracking, not existing ones)
-        if (existing == null || !existing.copyTag().hasUUID("pw_marker")) {
-            if (countTrackedAnvils(player) >= MAX_PORTABLE_ANVILS) return -1;
+        // Already a valid tracked portable anvil — no split needed
+        if (hasMarker) {
+            PLAYER_WORKSTATION_MARKER.put(player, marker);
+            return sourceSlot;
         }
+
+        // Enforce max portable anvil limit (only for NEW tracking)
+        if (countTrackedAnvils(player) >= MAX_PORTABLE_ANVILS) return -1;
 
         var tag = new CompoundTag();
         tag.putUUID("pw_marker", marker);
@@ -297,9 +301,12 @@ public class WorkstationManager {
         MenuProvider provider = createMenuProvider(menuType, player);
         if (provider == null) return;
 
-        // Merge old tracked anvil back BEFORE openMenu so it doesn't happen
-        // mid-split during the internal closeContainer call.
-        cleanupPlayer(player);
+        // Only clean up if there's actually a previous portable menu tracking.
+        // This prevents cleanupPlayer from clearing maps before the new menu
+        // has settled, which caused a server disconnect on the old code path.
+        if (PLAYER_WORKSTATION_ITEM.containsKey(player)) {
+            cleanupPlayer(player);
+        }
 
         player.openMenu(provider);
         PORTABLE_MENUS.add(player.containerMenu);

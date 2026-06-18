@@ -22,15 +22,15 @@ public class MinecraftMixin {
         long w = ((Minecraft)(Object)this).getWindow().getWindow();
         double[] a = new double[1], b = new double[1];
         GLFW.glfwGetCursorPos(w, a, b);
-        sx = a[0]; sy = b[1];
+        sx = a[0];
+        sy = b[0]; // FIX: b[0] not b[1] (double[1] array)
     }
 
     @Inject(method = "setScreen", at = @At("TAIL"))
     private void restore(Screen next, CallbackInfo ci) {
-        // Belt-and-suspenders: even if MouseHandlerMixin already cancelled
-        // grabMouse, this restoration confirms the cursor is at the right spot.
         if (!CursorState.pendingHoverClear || next == null) return;
         long w = ((Minecraft)(Object)this).getWindow().getWindow();
         GLFW.glfwSetCursorPos(w, sx, sy);
+        CursorState.pendingHoverClear = false; // clear AFTER restore
     }
 }
