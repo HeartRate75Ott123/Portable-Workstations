@@ -26,9 +26,17 @@ public class MinecraftMixin {
         if (newScreen == null) {
             portableworkstations$closePending = true;
         } else if (portableworkstations$closePending) {
-            // close → open sequence detected → skip cursor centering
             CursorState.pendingHoverClear = true;
             portableworkstations$closePending = false;
+        }
+    }
+
+    @Inject(method = "setScreen", at = @At("TAIL"))
+    private void onSetScreenTail(Screen newScreen, CallbackInfo ci) {
+        if (newScreen == null) {
+            // Clear flags when returning to game (leak safety)
+            portableworkstations$closePending = false;
+            CursorState.pendingHoverClear = false;
         }
     }
 }
