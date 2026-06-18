@@ -11,6 +11,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.*;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.AbstractFurnaceBlock;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -99,7 +100,9 @@ public class PortableFurnaceManager {
     @SubscribeEvent
     public static void onBlockPlaced(BlockEvent.EntityPlaceEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
-        if (!(event.getPlacedBlock().getBlock() instanceof AbstractFurnaceBlock)) return;
+        Block placed = event.getPlacedBlock().getBlock();
+        if (!(placed instanceof AbstractFurnaceBlock)
+                && !event.getPlacedBlock().hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.LIT)) return;
 
 
         FurnaceState state = ACTIVE_FURNACES.get(player.getUUID());
@@ -111,16 +114,20 @@ public class PortableFurnaceManager {
         else                                                    recipeType = state.recipeType;
 
         if (!state.recipeType.equals(recipeType)) return;
-        if (!(player.level().getBlockEntity(event.getPos()) instanceof AbstractFurnaceBlockEntity be)) return;
+        var be = player.level().getBlockEntity(event.getPos());
+        if (!(be instanceof net.minecraft.world.Container container)) return;
 
         for (int i = 0; i < 3; i++) {
             ItemStack stack = state.container.getItem(i);
-            if (!stack.isEmpty()) { be.setItem(i, stack.copy()); state.container.setItem(i, ItemStack.EMPTY); }
+            if (!stack.isEmpty()) { container.setItem(i, stack.copy()); state.container.setItem(i, ItemStack.EMPTY); }
         }
 
-        var acc = (AbstractFurnaceBlockEntityAccessor) be;
-        if (state.data.get(0) > 0) { acc.portableworkstations$setLitTime(state.data.get(0)); acc.portableworkstations$setLitDuration(state.data.get(1)); }
-        if (state.data.get(2) > 0 || state.data.get(3) > 0) { acc.portableworkstations$setCookingProgress(state.data.get(2)); acc.portableworkstations$setCookingTotalTime(state.data.get(3)); }
+        // Transfer cooking data if the BE supports AbstractFurnaceBlockEntity accessors
+        if (be instanceof AbstractFurnaceBlockEntity fbe) {
+            var acc = (AbstractFurnaceBlockEntityAccessor) fbe;
+            if (state.data.get(0) > 0) { acc.portableworkstations$setLitTime(state.data.get(0)); acc.portableworkstations$setLitDuration(state.data.get(1)); }
+            if (state.data.get(2) > 0 || state.data.get(3) > 0) { acc.portableworkstations$setCookingProgress(state.data.get(2)); acc.portableworkstations$setCookingTotalTime(state.data.get(3)); }
+        }
         // Set lit=true so the placed furnace shows the fire animation
         if (state.data.get(0) > 0) {
             var litState = event.getPlacedBlock().setValue(net.minecraft.world.level.block.AbstractFurnaceBlock.LIT, true);
