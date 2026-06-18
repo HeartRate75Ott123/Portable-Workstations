@@ -57,6 +57,17 @@ public class InventoryClickHandler {
         var itemId = BuiltInRegistries.ITEM.getKey(slot.getItem().getItem());
         if (!WorkstationManager.isWorkstationItem(itemId)) return;
 
+        // 8) Portable anvil limit: don't intercept if already 2 in inventory
+        if (itemId.getPath().equals("anvil") || itemId.getPath().equals("chipped_anvil") || itemId.getPath().equals("damaged_anvil")) {
+            int count = 0;
+            for (var stack : minecraft.player.getInventory().items) {
+                if (stack.isEmpty()) continue;
+                var cd = stack.get(net.minecraft.core.component.DataComponents.CUSTOM_DATA);
+                if (cd != null && cd.copyTag().hasUUID("pw_marker")) count++;
+                if (count >= 2) return; // let vanilla stack-splitting happen
+            }
+        }
+
         // ── All conditions met ──────────────────────────────────────────────
 
         // Cancel the vanilla right-click behavior (stack splitting)

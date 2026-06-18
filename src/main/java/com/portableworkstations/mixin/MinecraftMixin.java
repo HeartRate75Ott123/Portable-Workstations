@@ -1,6 +1,6 @@
 package com.portableworkstations.mixin;
 
-import com.portableworkstations.mixin.AbstractContainerScreenAccessor;
+import com.portableworkstations.client.CursorState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
@@ -43,10 +43,8 @@ public class MinecraftMixin {
             GLFW.glfwSetCursorPos(window,
                     portableworkstations$savedCursorX,
                     portableworkstations$savedCursorY);
-            // Clear hovered slot to prevent center-position highlight for one frame
-            if (newScreen instanceof AbstractContainerScreen<?> cs) {
-                ((AbstractContainerScreenAccessor) cs).portableworkstations$setHoveredSlot(null);
-            }
+            // Schedule hoveredSlot clear on next render (see AbstractContainerScreenMixin)
+            CursorState.pendingHoverClear = true;
             portableworkstations$shouldRestore = false;
         }
     }
