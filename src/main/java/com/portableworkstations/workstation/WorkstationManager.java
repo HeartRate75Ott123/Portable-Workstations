@@ -27,6 +27,7 @@ import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 import javax.annotation.Nullable;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiFunction;
 
 /**
  * Core manager that reads workstation definitions from the config,
@@ -261,9 +262,29 @@ public class WorkstationManager {
      * For anvil menus a trackable subclass records damage on the item.
      */
     @Nullable
+    // ── Plugin API ────────────────────────────────────────────────────
+
+    /** Functional interface for custom menu factories (Iron Furnaces, etc.). */
+    @FunctionalInterface
+    public interface MenuFactory extends BiFunction<Integer, net.minecraft.world.entity.player.Inventory, AbstractContainerMenu> {}
+
+    private static final Map<String, MenuFactory> PLUGIN_MENUS = new HashMap<>();
+
+    /** Register a custom menu factory for a given menu type string. */
+    public static void registerMenuFactory(String menuType, MenuFactory factory) {
+        PLUGIN_MENUS.put(menuType, factory);
+    }
+
+    // ── Menu creation ─────────────────────────────────────────────────
+
     private static MenuProvider createMenuProvider(String menuType, ServerPlayer player) {
         Component title = getTitle(menuType);
         var access = PortableContainerLevelAccess.create(player.level());
+
+        MenuFactory pluginFactory = PLUGIN_MENUS.get(menuType);
+        if (pluginFactory != null) {
+            return new SimpleMenuProvider((id, inv, p) -> pluginFactory.apply(id, inv), title);
+        }
 
         return new SimpleMenuProvider((containerId, inventory, unused) -> {
             return switch (menuType) {
@@ -293,7 +314,6 @@ public class WorkstationManager {
             };
         }, title);
     }
-
     /**
      * Returns the GUI title for a portable workstation.
      * Uses a mod-scoped key so it doesn't overwrite the vanilla
