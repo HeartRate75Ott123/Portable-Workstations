@@ -17,15 +17,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public class MouseHandlerMixin {
 
     @Shadow private boolean isGrabbing;
-    @Shadow private double x;
-    @Shadow private double y;
 
     @Inject(method = "grabMouse", at = @At("HEAD"), cancellable = true)
     private void onGrabMouse(CallbackInfo ci) {
-        if (!CursorState.pendingHoverClear) return; // normal path
-
-        // Our transition: just mark as grabbing without centering.
-        // Cursor stays exactly where the player right-clicked.
+        if (!CursorState.pendingHoverClear || this.isGrabbing) return;
         this.isGrabbing = true;
         ci.cancel();
     }
