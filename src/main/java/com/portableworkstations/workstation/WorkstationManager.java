@@ -301,38 +301,35 @@ public class WorkstationManager {
         MenuProvider provider = createMenuProvider(menuType, player);
         if (provider == null) return;
 
-        // Open the menu first so that any pending closeContainer → event
-        // fires and is handled normally before we touch tracking state.
+        // Open menu first so closeContainer → event fires naturally.
         player.openMenu(provider);
         PORTABLE_MENUS.add(player.containerMenu);
 
-        // Only clean up old tracking AFTER the new menu is open.
-        // This lets the old menu's closeContainer and ContainerCloseHandler
-        // fire naturally; cleanupPlayer just merges any leftover anvil.
-        if (PLAYER_WORKSTATION_ITEM.containsKey(player)) {
+        // For non-anvil workstations: clean up old tracking (merge back portable).
+        // For anvils: the portable anvil is already in its tracked slot with a
+        // UUID marker; merging it back and re-splitting causes slot jumping.
+        boolean isAnvil = "anvil".equals(menuType);
+        if (!isAnvil && PLAYER_WORKSTATION_ITEM.containsKey(player)) {
             cleanupPlayer(player);
         }
 
         PLAYER_WORKSTATION_ITEM.put(player, itemId);
-        // Validate the client-sent slot: does it actually contain our item?
+        // Validate the client-sent slot
         int slot = -1;
         if (slotIndex >= 0 && slotIndex < player.getInventory().items.size()) {
             var s = player.getInventory().items.get(slotIndex);
             if (!s.isEmpty() && BuiltInRegistries.ITEM.getKey(s.getItem()).equals(itemId))
                 slot = slotIndex;
         }
-        if (slot < 0) return; // item vanished — nothing to track
+        if (slot < 0) return;
 
         PLAYER_WORKSTATION_SLOT.put(player, slot);
         var stack = player.getInventory().items.get(slot);
         PLAYER_WORKSTATION_COUNT.put(player, stack.getCount());
-        // Split 1 from the anvil stack into a dedicated tracked slot.
-        if ("anvil".equals(menuType)) {
+
+        if (isAnvil) {
             int trackedSlot = splitAnvilForTracking(player, slot);
-            if (trackedSlot == -1) {
-                player.closeContainer();
-                return;
-            }
+            if (trackedSlot == -1) { player.closeContainer(); return; }
             if (trackedSlot != slot) {
                 PLAYER_WORKSTATION_ORIGINAL_SLOT.put(player, slot);
                 PLAYER_WORKSTATION_SLOT.put(player, trackedSlot);

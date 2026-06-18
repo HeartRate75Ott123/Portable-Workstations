@@ -77,10 +77,6 @@ public class InventoryClickHandler {
 
         // Tell the server to open the workstation menu
         PacketDistributor.sendToServer(new OpenWorkstationPayload(itemId.toString(), slot.getSlotIndex()));
-        // Pre-set cursor flag so grabMouse centering is skipped when the new screen opens.
-        // This handles both cases: open from InventoryScreen (no closeContainer) and
-        // switch between workstation GUIs (has closeContainer).
-        com.portableworkstations.client.CursorState.pendingHoverClear = true;
 
     }
 }

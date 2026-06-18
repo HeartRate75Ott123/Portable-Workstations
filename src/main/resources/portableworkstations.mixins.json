@@ -5,11 +5,9 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "AbstractContainerScreenAccessor",
-    "AbstractContainerScreenMixin",
     "AbstractFurnaceBlockEntityAccessor",
     "CraftingMenuAccessor",
-    "MinecraftMixin",
-    "MouseHandlerMixin"
+    "MinecraftMixin"
   ],
   "injectors": {
     "defaultRequire": 1
