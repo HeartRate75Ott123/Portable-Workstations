@@ -24,19 +24,10 @@ public class MinecraftMixin {
     @Inject(method = "setScreen", at = @At("HEAD"))
     private void onSetScreenHead(Screen newScreen, CallbackInfo ci) {
         if (newScreen == null) {
-            portableworkstations$closePending = true; // screen closing
+            portableworkstations$closePending = true;
         } else if (portableworkstations$closePending) {
-            // close → open in sequence: this is our workstation transition
+            // close → open sequence detected → skip cursor centering
             CursorState.pendingHoverClear = true;
-            portableworkstations$closePending = false;
-        }
-    }
-
-    @Inject(method = "setScreen", at = @At("TAIL"))
-    private void onSetScreenTail(Screen newScreen, CallbackInfo ci) {
-        // If this was not followed by an open (e.g. game → GUI directly),
-        // clear the closePending flag so it doesn't leak.
-        if (newScreen == null) {
             portableworkstations$closePending = false;
         }
     }
