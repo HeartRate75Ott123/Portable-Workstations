@@ -301,35 +301,42 @@ public class WorkstationManager {
         MenuProvider provider = createMenuProvider(menuType, player);
         if (provider == null) return;
 
-        // Only clean up if there's actually a previous portable menu tracking.
-        // This prevents cleanupPlayer from clearing maps before the new menu
-        // has settled, which caused a server disconnect on the old code path.
+        // Open the menu first so that any pending closeContainer → event
+        // fires and is handled normally before we touch tracking state.
+        player.openMenu(provider);
+        PORTABLE_MENUS.add(player.containerMenu);
+
+        // Only clean up old tracking AFTER the new menu is open.
+        // This lets the old menu's closeContainer and ContainerCloseHandler
+        // fire naturally; cleanupPlayer just merges any leftover anvil.
         if (PLAYER_WORKSTATION_ITEM.containsKey(player)) {
             cleanupPlayer(player);
         }
 
-        player.openMenu(provider);
-        PORTABLE_MENUS.add(player.containerMenu);
         PLAYER_WORKSTATION_ITEM.put(player, itemId);
-        // Use the exact slot the client clicked — no searching needed
-        int slot = slotIndex >= 0 && slotIndex < player.getInventory().items.size() ? slotIndex : -1;
-        if (slot >= 0) {
-            PLAYER_WORKSTATION_SLOT.put(player, slot);
-            var stack = player.getInventory().items.get(slot);
-            PLAYER_WORKSTATION_COUNT.put(player, stack.getCount());
-            // Split 1 from the anvil stack into a dedicated tracked slot.
-            if ("anvil".equals(menuType)) {
-                int trackedSlot = splitAnvilForTracking(player, slot);
-                if (trackedSlot == -1) {
-                    // Limit reached — close the just-opened menu, don't track
-                    player.closeContainer();
-                    return;
-                }
-                if (trackedSlot != slot) {
-                    PLAYER_WORKSTATION_ORIGINAL_SLOT.put(player, slot); // main stack
-                    PLAYER_WORKSTATION_SLOT.put(player, trackedSlot);   // tracked item
-                    PLAYER_WORKSTATION_COUNT.put(player, 1);
-                }
+        // Validate the client-sent slot: does it actually contain our item?
+        int slot = -1;
+        if (slotIndex >= 0 && slotIndex < player.getInventory().items.size()) {
+            var s = player.getInventory().items.get(slotIndex);
+            if (!s.isEmpty() && BuiltInRegistries.ITEM.getKey(s.getItem()).equals(itemId))
+                slot = slotIndex;
+        }
+        if (slot < 0) return; // item vanished — nothing to track
+
+        PLAYER_WORKSTATION_SLOT.put(player, slot);
+        var stack = player.getInventory().items.get(slot);
+        PLAYER_WORKSTATION_COUNT.put(player, stack.getCount());
+        // Split 1 from the anvil stack into a dedicated tracked slot.
+        if ("anvil".equals(menuType)) {
+            int trackedSlot = splitAnvilForTracking(player, slot);
+            if (trackedSlot == -1) {
+                player.closeContainer();
+                return;
+            }
+            if (trackedSlot != slot) {
+                PLAYER_WORKSTATION_ORIGINAL_SLOT.put(player, slot);
+                PLAYER_WORKSTATION_SLOT.put(player, trackedSlot);
+                PLAYER_WORKSTATION_COUNT.put(player, 1);
             }
         }
     }
