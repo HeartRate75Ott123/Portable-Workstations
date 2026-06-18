@@ -106,6 +106,19 @@ definitions = [
 - **JEI / REI / EMI**: Fully compatible — the workstation menus are vanilla classes, so recipe viewers work normally
 - **Other inventory mods**: The mod only intercepts right-clicks on the *survival* inventory screen (`InventoryScreen`) and only when conditions are exactly right. It does not cancel other mods' events.
 - **Custom workstations**: Add any block/item from any mod via the config file
+- **Plugin API for custom menus** (`Iron Furnaces`, etc.): Mods can register their own menu factories for custom menu types. In your `@Mod` constructor or `FMLCommonSetupEvent`:
+  ```java
+  WorkstationManager.registerMenuFactory("iron_furnace", (id, inv, player) -> {
+      // Return your custom menu instance. For furnace-type menus the
+      // PortableFurnaceManager shares a single FurnaceState per player:
+      var state = PortableFurnaceManager.get(player.getUUID());
+      if (state != null) {
+          // Create your menu using state.container and state.data
+      }
+      return new MyCustomMenu(id, inv);
+  });
+  ```
+  Then users add `"my_mod:my_furnace=iron_furnace"` to the config definitions.
 
 ## How It Works
 
