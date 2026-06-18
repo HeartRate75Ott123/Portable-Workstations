@@ -25,6 +25,19 @@ public class PortableWorkstations {
     public static final String MODID = "portableworkstations";
     public static final Logger LOGGER = LogUtils.getLogger();
 
+    /**
+     * If the config file is from an older version, rewrite it so all new
+     * default entries (workstations, speed overrides, etc.) appear on disk.
+     * User-modified values are preserved because the spec only writes
+     * values that are missing or changed from defaults.
+     */
+    private static void autoMigrateConfig() {
+        if (Config.CONFIG_VERSION.get() >= Config.CURRENT_CONFIG_VERSION) return;
+        LOGGER.info("Config version {} -> {}, updating config file",
+                Config.CONFIG_VERSION.get(), Config.CURRENT_CONFIG_VERSION);
+        Config.CONFIG_VERSION.set(Config.CURRENT_CONFIG_VERSION);
+    }
+
     public PortableWorkstations(IEventBus modEventBus, ModContainer modContainer) {
         // Register common config (COMMON type so both client and server use it)
         modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
@@ -33,10 +46,14 @@ public class PortableWorkstations {
         modEventBus.addListener(ServerPayloadHandler::registerPackets);
         // Rebuild workstation cache when config reloads
         modEventBus.addListener(WorkstationManager::onConfigReload);
-        // Load furnace speeds from config on first load
+        // Load furnace speeds from config on first load + auto-migrate outdated config
         modEventBus.addListener(net.neoforged.fml.event.config.ModConfigEvent.Loading.class,
-            event -> { if (event.getConfig().getSpec() == Config.SPEC)
-                PortableFurnaceManager.loadSpeedsFromConfig(); });
+            event -> {
+                if (event.getConfig().getSpec() == Config.SPEC) {
+                    PortableFurnaceManager.loadSpeedsFromConfig();
+                    autoMigrateConfig();
+                }
+            });
 
         // Register event handlers on the global game bus
         NeoForge.EVENT_BUS.register(ContainerCloseHandler.class);

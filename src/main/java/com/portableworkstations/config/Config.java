@@ -6,10 +6,14 @@ import java.util.List;
 import java.util.Set;
 
 public class Config {
+    /** Bump this when the default config layout changes (new sections, new default entries). */
+    public static final int CURRENT_CONFIG_VERSION = 1;
+
     private static final ModConfigSpec.Builder BUILDER = new ModConfigSpec.Builder();
 
     // ── General ──────────────────────────────────────────────────────────────
     public static final ModConfigSpec.BooleanValue ENABLED;
+    public static final ModConfigSpec.IntValue CONFIG_VERSION;
 
     // ── Workstation Definitions ──────────────────────────────────────────────
     public static final ModConfigSpec.ConfigValue<List<? extends String>> WORKSTATION_DEFINITIONS;
@@ -24,6 +28,10 @@ public class Config {
 
     static {
         BUILDER.comment("General settings").push("general");
+
+        CONFIG_VERSION = BUILDER
+                .comment("Internal config version. Do not modify.")
+                .defineInRange("config_version", CURRENT_CONFIG_VERSION, 1, 100);
 
         ENABLED = BUILDER
                 .comment(
