@@ -303,9 +303,11 @@ public class WorkstationManager {
         MenuProvider provider = createMenuProvider(menuType, player);
         if (provider == null) return;
 
+        // Set menu type BEFORE openMenu so closeContainer → ContainerCloseHandler
+        // can read the correct type and skip cleanupPlayer for anvil menus.
+        PLAYER_MENU_TYPE.put(player, menuType);
         player.openMenu(provider);
         PORTABLE_MENUS.add(player.containerMenu);
-        PLAYER_MENU_TYPE.put(player, menuType);
 
         // Let closeContainer → ContainerCloseHandler clean up old tracking
         // (merges back portable anvils) for non-anvil types automatically.

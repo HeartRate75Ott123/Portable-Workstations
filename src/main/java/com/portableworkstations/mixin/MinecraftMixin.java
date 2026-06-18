@@ -2,6 +2,7 @@ package com.portableworkstations.mixin;
 
 import com.portableworkstations.client.CursorState;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.MouseHandler;
 import net.minecraft.client.gui.screens.Screen;
 import org.lwjgl.glfw.GLFW;
 import org.spongepowered.asm.mixin.Mixin;
@@ -9,20 +10,33 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/**
- * Force cursor to saved position at the very end of setScreen, after
- * all vanilla mouse handler calls (releaseMouse/grabMouse) have run.
- */
 @Mixin(Minecraft.class)
 public class MinecraftMixin {
 
+    /** Directly set MouseHandler position + GLFW position. */
+    private static void setPos(Minecraft self, double x, double y) {
+        long w = self.getWindow().getWindow();
+        GLFW.glfwSetCursorPos(w, x, y);
+        // Also set MouseHandler fields directly so render uses them immediately.
+        self.mouseHandler.xpos = x;
+        self.mouseHandler.ypos = y;
+    }
+
+    /** Early restore: right after releaseMouse, before any init/render. */
+    @Inject(method = "setScreen",
+            at = @At(value = "INVOKE",
+                     target = "Lnet/minecraft/client/MouseHandler;releaseMouse()V",
+                     shift = At.Shift.AFTER))
+    private void afterReleaseMouse(Screen next, CallbackInfo ci) {
+        if (!CursorState.hasSaved) return;
+        setPos((Minecraft)(Object)this, CursorState.savedX, CursorState.savedY);
+    }
+
+    /** Late restore: at method return (catches close→grabMouse, handles all paths). */
     @Inject(method = "setScreen", at = @At("RETURN"))
     private void restore(Screen next, CallbackInfo ci) {
         if (!CursorState.hasSaved) return;
-        long w = ((Minecraft)(Object)this).getWindow().getWindow();
-        GLFW.glfwSetCursorPos(w, CursorState.savedX, CursorState.savedY);
-        // Only consume on actual opens (next != null). Closes keep the flag
-        // alive so the following open can still restore.
+        setPos((Minecraft)(Object)this, CursorState.savedX, CursorState.savedY);
         if (next != null) CursorState.hasSaved = false;
     }
 }
