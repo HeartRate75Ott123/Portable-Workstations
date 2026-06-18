@@ -64,7 +64,7 @@ public class Config {
         ).push("furnace_speeds");
         FURNACE_SPEEDS_CONFIG = BUILDER
                 .comment("List of \"block_id=speed\" overrides.")
-                .defineList("overrides", java.util.Collections.emptyList(), Config::validateSpeedEntry);
+                .defineList("overrides", List.of("ironfurnaces:gold_furnace=2"), Config::validateSpeedEntry);
         BUILDER.pop();
     }
 
