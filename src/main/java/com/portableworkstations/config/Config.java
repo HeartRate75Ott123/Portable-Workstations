@@ -6,8 +6,8 @@ import java.util.List;
 import java.util.Set;
 
 public class Config {
-    /** Bump this when the default config layout changes (new sections, new default entries). */
-    public static final int CURRENT_CONFIG_VERSION = 1;
+    /** Updated automatically from mod_version in gradle.properties via PortableWorkstations constructor. */
+    public static int CURRENT_CONFIG_VERSION = 0;
 
     private static final ModConfigSpec.Builder BUILDER = new ModConfigSpec.Builder();
 

@@ -39,7 +39,12 @@ public class PortableWorkstations {
     }
 
     public PortableWorkstations(IEventBus modEventBus, ModContainer modContainer) {
-        // Register common config (COMMON type so both client and server use it)
+        // Sync config version from mod version (e.g. "1.1.0" → 110)
+        var rawVer = modContainer.getModInfo().getVersion().toString();
+        try { Config.CURRENT_CONFIG_VERSION = Integer.parseInt(rawVer.replace(".", "")); }
+        catch (NumberFormatException e) { Config.CURRENT_CONFIG_VERSION = 1; }
+
+        // Register common config
         modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
 
         // Register network payloads on the mod bus
