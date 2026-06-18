@@ -131,14 +131,17 @@ public class AnvilTracker {
         WorkstationManager.unmarkStack(stack);
         inv.set(slot, stack);
 
-        // Place the tracked item in the first free slot
+        // Place the tracked item in the first free slot, or drop if full
+        boolean placed = false;
         for (int i = 0; i < inv.size(); i++) {
             if (inv.get(i).isEmpty()) {
                 inv.set(i, tracked);
                 WorkstationManager.updateWorkstationSlot(player, i);
+                placed = true;
                 break;
             }
         }
+        if (!placed) player.drop(tracked, false);
         WorkstationManager.overrideWorkstationItem(player, targetId);
     }
 
