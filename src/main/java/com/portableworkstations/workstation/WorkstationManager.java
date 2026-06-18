@@ -293,9 +293,10 @@ public class WorkstationManager {
         String menuType = getMenuType(blockId);
         if (menuType == null) return;
 
-        // No explicit closeContainer() here — ServerPlayer.openMenu() does it internally
-        // if the player is not in the inventory menu. Removing our call avoids a
-        // redundant close → open round-trip that resets the cursor to the centre.
+        // Merge old tracked anvil back BEFORE opening new menu.
+        // This prevents openMenu() → closeContainer → cleanupPlayer from
+        // merging during the split, which would cause slot confusion.
+        cleanupPlayer(player);
 
         ResourceLocation itemId = ResourceLocation.parse(blockId);
         MenuProvider provider = createMenuProvider(menuType, player);

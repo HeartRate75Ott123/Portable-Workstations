@@ -3,40 +3,34 @@ package com.portableworkstations.mixin;
 import com.portableworkstations.client.CursorState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
+import org.lwjgl.glfw.GLFW;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/**
- * Tracks close→open screen transitions so MouseHandlerMixin can prevent
- * the cursor centering that normally causes a 1-frame highlight flash.
- * Only affects our mod's workstation GUIs; all other screen changes
- * (vanilla inventory, other mods, chat, etc.) are completely untouched.
- */
 @Mixin(Minecraft.class)
 public class MinecraftMixin {
 
     @Unique
-    private static boolean portableworkstations$closePending = false;
+    private static double sx, sy;
 
     @Inject(method = "setScreen", at = @At("HEAD"))
-    private void onSetScreenHead(Screen newScreen, CallbackInfo ci) {
-        if (newScreen == null) {
-            portableworkstations$closePending = true;
-        } else if (portableworkstations$closePending) {
-            CursorState.pendingHoverClear = true;
-            portableworkstations$closePending = false;
-        }
+    private void save(Screen next, CallbackInfo ci) {
+        if (!CursorState.pendingHoverClear) return;
+        long w = ((Minecraft)(Object)this).getWindow().getWindow();
+        double[] a = new double[1], b = new double[1];
+        GLFW.glfwGetCursorPos(w, a, b);
+        sx = a[0]; sy = b[1];
     }
 
     @Inject(method = "setScreen", at = @At("TAIL"))
-    private void onSetScreenTail(Screen newScreen, CallbackInfo ci) {
-        if (newScreen == null) {
-            // Clear flags when returning to game (leak safety)
-            portableworkstations$closePending = false;
-            CursorState.pendingHoverClear = false;
-        }
+    private void restore(Screen next, CallbackInfo ci) {
+        // Belt-and-suspenders: even if MouseHandlerMixin already cancelled
+        // grabMouse, this restoration confirms the cursor is at the right spot.
+        if (!CursorState.pendingHoverClear || next == null) return;
+        long w = ((Minecraft)(Object)this).getWindow().getWindow();
+        GLFW.glfwSetCursorPos(w, sx, sy);
     }
 }
