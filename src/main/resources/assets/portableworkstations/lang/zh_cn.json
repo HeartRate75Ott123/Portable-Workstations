@@ -31,5 +31,15 @@
   "portableworkstations.configuration.furnace_detection.default_menu": "默认菜单",
   "portableworkstations.configuration.furnace_detection.default_menu.tooltip": "检测到的熔炉菜单类型。",
   "portableworkstations.configuration.furnace_speeds.overrides": "速度覆盖",
-  "portableworkstations.configuration.furnace_speeds.overrides.tooltip": "block_id=speed 条目。"
+  "portableworkstations.configuration.furnace_speeds.overrides.tooltip": "block_id=speed 条目。",
+  "general.enabled": "启用",
+  "general.enabled.tooltip": "关闭整个模组。",
+  "workstations.definitions": "工作站列表",
+  "workstations.definitions.tooltip": "block_id=menu_type 条目。",
+  "furnace_detection.auto_detect": "自动检测",
+  "furnace_detection.auto_detect.tooltip": "自动检测模组熔炉。",
+  "furnace_detection.default_menu": "默认菜单",
+  "furnace_detection.default_menu.tooltip": "检测到的熔炉菜单类型。",
+  "furnace_speeds.overrides": "速度覆盖",
+  "furnace_speeds.overrides.tooltip": "block_id=speed 条目。"
 }
