@@ -2,7 +2,6 @@ package com.portableworkstations.config;
 
 import net.neoforged.neoforge.common.ModConfigSpec;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -64,7 +63,7 @@ public class Config {
         ).push("furnace_speeds");
         FURNACE_SPEEDS_CONFIG = BUILDER
                 .comment("List of \"block_id=speed\" overrides.")
-                .defineList("overrides", List.of("ironfurnaces:gold_furnace=2"), Config::validateSpeedEntry);
+                .defineListAllowEmpty("overrides", List::of, Config::validateSpeedEntry);
         BUILDER.pop();
     }
 
