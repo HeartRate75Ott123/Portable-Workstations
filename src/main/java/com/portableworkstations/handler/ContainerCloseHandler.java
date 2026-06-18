@@ -40,18 +40,18 @@ public class ContainerCloseHandler {
         if (!WorkstationManager.isPortableMenu(menu)) return;
         WorkstationManager.removePortableMenu(menu);
 
-        // Clean up player tracking — BUT skip for anvils (the portable anvil
-        // item stays in its tracked slot with its UUID marker; merging it back
-        // causes the item to jump to a different slot on next re-open).
         if (player instanceof ServerPlayer serverPlayer) {
             String mt = WorkstationManager.getPlayerMenuType(serverPlayer);
-            if (!"anvil".equals(mt)) {
-                WorkstationManager.cleanupPlayer(serverPlayer);
-            }
+
+            // ── Anvil: skip EVERYTHING — don't merge, don't move slots,
+            //     don't iterate. The portable anvil stays in its tracked slot.
+            if ("anvil".equals(mt)) return;
+
+            // ── Other workstations: clean up tracking normally.
+            WorkstationManager.cleanupPlayer(serverPlayer);
         }
 
         // ── Furnace special case ─────────────────────────────────────────
-        // Background smelting owns the container; don't steal its items.
         if (menu instanceof AbstractFurnaceMenu) return;
 
         // ── All other workstations ───────────────────────────────────────
