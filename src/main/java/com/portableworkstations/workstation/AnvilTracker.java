@@ -13,93 +13,48 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.level.BlockEvent;
 
 import java.util.*;
-import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * Anvil damage tracking — deterministic, no randomness per use.
- * <p>
- * Each damage stage pre-allocates {@code 5 + random(8)} uses (avg 8.5).
- * A fresh anvil goes through 3 stages → ~25 uses total.
- * Chipped anvil → 2 stages → ~17 uses.
- * Damaged anvil → 1 stage → ~8 uses.
+ * Anvil damage — vanilla 12 % random chance per use.
+ * 3 damage stages = ~25 uses average for a fresh anvil.
  */
 public class AnvilTracker {
 
     private static final int MAX_STAGES = 3;
+    private static final float DAMAGE_CHANCE = 0.12f;
+    private static final Random RNG = new Random();
 
-    /** Per-player: inventory slot → [usesLeft, stage]. */
-    private static final Map<ServerPlayer, Map<Integer, int[]>> TRACKER = new WeakHashMap<>();
+    /** Per-player: slot index → damage stage (0, 1, 2). */
+    private static final Map<ServerPlayer, Map<Integer, Integer>> TRACKER = new WeakHashMap<>();
 
     // ── Public API ──────────────────────────────────────────────────────────
 
     public static void onAnvilUsed(ServerPlayer player) {
+        if (RNG.nextFloat() >= DAMAGE_CHANCE) return;
+
         int slot = resolveSlot(player);
         if (slot < 0) { player.closeContainer(); return; }
 
-        int[] data = getOrCreateTracker(player, slot);
-        // 1-based: —data[0], check for 0
-        data[0]--;
+        int stage = perPlayer(player).merge(slot, 1, Integer::sum);
 
-        if (data[0] > 0) return;          // still has uses left in this stage
-
-        // Stage advanced
-        data[1]++;                         // damageStage ++
-
-        if (data[1] >= MAX_STAGES) {
+        if (stage >= MAX_STAGES) {
             breakInSlot(player, slot);
             perPlayer(player).remove(slot);
         } else {
             upgradeInSlot(player, slot);
-            data[0] = nextUses();           // allocate uses for the new stage
         }
     }
 
-    /** Returns current damage stage (0–2) for the tracked slot. */
     public static int getDamageLevel(ServerPlayer player, ResourceLocation ignored) {
         int slot = resolveSlot(player);
         if (slot < 0) return 0;
-        int[] data = perPlayer(player).get(slot);
-        return data != null ? data[1] : 0;
+        Integer s = perPlayer(player).get(slot);
+        return s != null ? s : 0;
     }
 
     public static void resetDamage(ServerPlayer player, ResourceLocation ignored) {
         int slot = resolveSlot(player);
         if (slot >= 0) perPlayer(player).remove(slot);
-    }
-
-    // ── Deterministic counter allocation ────────────────────────────────────
-
-    private static final Random RNG = new Random();
-
-    /** Generates 5–12 inclusive (avg ~8.5). */
-    private static int nextUses() {
-        return 5 + RNG.nextInt(8);
-    }
-
-    /** Returns the initial stage based on item variant. */
-    private static int initialStage(String path) {
-        if (path.equals("damaged_anvil")) return 2;
-        if (path.equals("chipped_anvil")) return 1;
-        return 0;
-    }
-
-    /** Gets or initialises the [usesLeft, stage] array for this slot. */
-    private static int[] getOrCreateTracker(ServerPlayer player, int slot) {
-        Map<Integer, int[]> map = perPlayer(player);
-        int[] data = map.get(slot);
-        if (data == null) {
-            ItemStack stack = player.getInventory().items.get(slot);
-            String path = BuiltInRegistries.ITEM.getKey(stack.getItem()).getPath();
-            int stage = initialStage(path);
-            int usesLeft = nextUses();
-            data = new int[]{usesLeft, stage};
-            map.put(slot, data);
-        }
-        return data;
-    }
-
-    private static Map<Integer, int[]> perPlayer(ServerPlayer player) {
-        return TRACKER.computeIfAbsent(player, k -> new HashMap<>());
     }
 
     // ── Slot resolution ─────────────────────────────────────────────────────
@@ -111,10 +66,12 @@ public class AnvilTracker {
         if (itemId == null) return -1;
 
         Inventory inv = player.getInventory();
+        // Quick path: tracked slot still has the right item
         if (slot >= 0 && slot < inv.items.size()) {
             ItemStack s = inv.items.get(slot);
             if (!s.isEmpty() && BuiltInRegistries.ITEM.getKey(s.getItem()).equals(itemId)) return slot;
         }
+        // Marker path: UUID on the item
         if (marker != null) {
             for (int i = 0; i < inv.items.size(); i++) {
                 ItemStack s = inv.items.get(i);
@@ -125,12 +82,13 @@ public class AnvilTracker {
                 }
             }
         }
-        int expectedCount = WorkstationManager.getPlayerWorkstationCount(player);
+        // Fallback: count-match then first match
+        int expected = WorkstationManager.getPlayerWorkstationCount(player);
         int best = -1;
         for (int i = 0; i < inv.items.size(); i++) {
             ItemStack s = inv.items.get(i);
             if (s.isEmpty() || !BuiltInRegistries.ITEM.getKey(s.getItem()).equals(itemId)) continue;
-            if (s.getCount() == expectedCount) { best = i; break; }
+            if (s.getCount() == expected) { best = i; break; }
             if (best < 0) best = i;
         }
         if (best >= 0) return migrateData(player, slot, best);
@@ -138,15 +96,13 @@ public class AnvilTracker {
     }
 
     private static int migrateData(ServerPlayer player, int oldSlot, int newSlot) {
-        Map<Integer, int[]> map = perPlayer(player);
-        if (oldSlot >= 0 && map.containsKey(oldSlot)) {
-            map.put(newSlot, map.remove(oldSlot));
-        }
+        Map<Integer, Integer> map = perPlayer(player);
+        if (oldSlot >= 0 && map.containsKey(oldSlot)) map.put(newSlot, map.remove(oldSlot));
         WorkstationManager.updateWorkstationSlot(player, newSlot);
         return newSlot;
     }
 
-    // ─── Slot operations ────────────────────────────────────────────────────
+    // ── Slot operations ─────────────────────────────────────────────────────
 
     private static void upgradeInSlot(ServerPlayer player, int slot) {
         Inventory inv = player.getInventory();
@@ -161,11 +117,10 @@ public class AnvilTracker {
         else return;
 
         var newStack = new ItemStack(BuiltInRegistries.ITEM.get(targetId), stack.getCount());
-        var oldCd = stack.get(net.minecraft.core.component.DataComponents.CUSTOM_DATA);
-        if (oldCd != null && oldCd.copyTag().hasUUID("pw_marker")) {
+        var cd = stack.get(net.minecraft.core.component.DataComponents.CUSTOM_DATA);
+        if (cd != null && cd.copyTag().hasUUID("pw_marker"))
             newStack.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA,
-                    net.minecraft.world.item.component.CustomData.of(oldCd.copyTag()));
-        }
+                    net.minecraft.world.item.component.CustomData.of(cd.copyTag()));
         inv.items.set(slot, newStack);
         WorkstationManager.overrideWorkstationItem(player, targetId);
     }
@@ -191,9 +146,8 @@ public class AnvilTracker {
 
         int slot = resolveSlot(player);
         if (slot < 0) return;
-        int[] data = perPlayer(player).get(slot);
-        int stage = data != null ? data[1] : 0;
-        if (stage <= 0) return;
+        Integer stage = perPlayer(player).get(slot);
+        if (stage == null || stage <= 0) return;
 
         var newBlock = switch (stage) {
             case 1 -> Blocks.CHIPPED_ANVIL;
@@ -201,9 +155,12 @@ public class AnvilTracker {
             default -> null;
         };
         if (newBlock != null) player.level().setBlock(event.getPos(), newBlock.defaultBlockState(), 3);
-        // Keep tracker data — mining the block and right-clicking again will
-        // migrate it via resolveSlot, preserving the damage stage.
+        // Tracker kept — mining + re-opening inherits stage from item variant
     }
 
     public static void clear() { TRACKER.clear(); }
+
+    private static Map<Integer, Integer> perPlayer(ServerPlayer player) {
+        return TRACKER.computeIfAbsent(player, k -> new HashMap<>());
+    }
 }

@@ -237,15 +237,7 @@ public class WorkstationManager {
         return PLAYER_WORKSTATION_COUNT.getOrDefault(player, 0);
     }
 
-    /** Finds the first inventory slot containing an item matching the given id. */
-    private static int findSlotForItem(ServerPlayer player, ResourceLocation id) {
-        var inv = player.getInventory().items;
-        for (int i = 0; i < inv.size(); i++) {
-            if (!inv.get(i).isEmpty() && BuiltInRegistries.ITEM.getKey(inv.get(i).getItem()).equals(id))
-                return i;
-        }
-        return -1;
-    }
+    // findSlotForItem removed — slot index is sent from client via OpenWorkstationPayload
 
     // ── Menu opening ────────────────────────────────────────────────────────
 
@@ -257,7 +249,7 @@ public class WorkstationManager {
      * @param player  the server-side player
      * @param blockId the registry name of the clicked item
      */
-    public static void openWorkstation(ServerPlayer player, String blockId) {
+    public static void openWorkstation(ServerPlayer player, String blockId, int slotIndex) {
         if (!Config.ENABLED.getAsBoolean()) return;
 
         String menuType = getMenuType(blockId);
@@ -274,8 +266,8 @@ public class WorkstationManager {
         player.openMenu(provider);
         PORTABLE_MENUS.add(player.containerMenu);
         PLAYER_WORKSTATION_ITEM.put(player, itemId);
-        // Track which inventory slot was clicked (for AnvilTracker slot-precise damage)
-        int slot = findSlotForItem(player, itemId);
+        // Use the exact slot the client clicked — no searching needed
+        int slot = slotIndex >= 0 && slotIndex < player.getInventory().items.size() ? slotIndex : -1;
         if (slot >= 0) {
             PLAYER_WORKSTATION_SLOT.put(player, slot);
             var stack = player.getInventory().items.get(slot);

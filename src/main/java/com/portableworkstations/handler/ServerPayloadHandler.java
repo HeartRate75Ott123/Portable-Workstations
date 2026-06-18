@@ -35,8 +35,7 @@ public class ServerPayloadHandler {
         context.enqueueWork(() -> {
             if (!(context.player() instanceof ServerPlayer serverPlayer)) return;
 
-            // Let the WorkstationManager open the correct menu
-            WorkstationManager.openWorkstation(serverPlayer, payload.blockId());
+            WorkstationManager.openWorkstation(serverPlayer, payload.blockId(), payload.slotIndex());
         });
     }
 }

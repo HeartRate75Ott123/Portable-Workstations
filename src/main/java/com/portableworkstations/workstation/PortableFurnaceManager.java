@@ -76,6 +76,11 @@ public class PortableFurnaceManager {
         var acc = (AbstractFurnaceBlockEntityAccessor) be;
         if (state.data.get(0) > 0) { acc.portableworkstations$setLitTime(state.data.get(0)); acc.portableworkstations$setLitDuration(state.data.get(1)); }
         if (state.data.get(2) > 0 || state.data.get(3) > 0) { acc.portableworkstations$setCookingProgress(state.data.get(2)); acc.portableworkstations$setCookingTotalTime(state.data.get(3)); }
+        // Set lit=true so the placed furnace shows the fire animation
+        if (state.data.get(0) > 0) {
+            var litState = event.getPlacedBlock().setValue(net.minecraft.world.level.block.AbstractFurnaceBlock.LIT, true);
+            if (litState != null) player.level().setBlock(event.getPos(), litState, 3);
+        }
         be.setChanged();
 
         ACTIVE_FURNACES.remove(player.getUUID());

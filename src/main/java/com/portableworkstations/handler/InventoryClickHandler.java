@@ -63,7 +63,8 @@ public class InventoryClickHandler {
         event.setCanceled(true);
 
         // Tell the server to open the workstation menu
-        PacketDistributor.sendToServer(new OpenWorkstationPayload(itemId.toString()));
+        // Send the exact inventory slot so the server doesn't have to guess which stack
+        PacketDistributor.sendToServer(new OpenWorkstationPayload(itemId.toString(), slot.getSlotIndex()));
 
     }
 }
