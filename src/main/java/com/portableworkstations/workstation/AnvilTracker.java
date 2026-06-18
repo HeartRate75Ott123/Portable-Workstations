@@ -1,5 +1,6 @@
 package com.portableworkstations.workstation;
 
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
@@ -15,8 +16,9 @@ import net.neoforged.neoforge.event.level.BlockEvent;
 import java.util.*;
 
 /**
- * Anvil damage — vanilla 12 % random chance per use.
- * 3 damage stages = ~25 uses average for a fresh anvil.
+ * Anvil damage — UUID is the primary key, slot is just a lookup handle.
+ * This guarantees damage always follows the exact item the player clicked,
+ * even across inventory moves, GUI reopen, or partial use cycles.
  */
 public class AnvilTracker {
 
@@ -24,90 +26,81 @@ public class AnvilTracker {
     private static final float DAMAGE_CHANCE = 0.12f;
     private static final Random RNG = new Random();
 
-    /** Per-player: slot index → damage stage (0, 1, 2). */
-    private static final Map<ServerPlayer, Map<Integer, Integer>> TRACKER = new WeakHashMap<>();
+    /** Per-player: UUID → damageStage (0 = anvil, 1 = chipped, 2 = damaged). */
+    private static final Map<ServerPlayer, Map<UUID, Integer>> TRACKER = new WeakHashMap<>();
+
+    /**
+     * Initialises the tracker stage from the item variant.
+     * Called from WorkstationManager when a new UUID is assigned.
+     */
+    public static void initStage(ServerPlayer player, UUID marker, ItemStack stack) {
+        if (marker == null || perPlayer(player).containsKey(marker)) return;
+        String p = BuiltInRegistries.ITEM.getKey(stack.getItem()).getPath();
+        int stage = p.equals("damaged_anvil") ? 2 : p.equals("chipped_anvil") ? 1 : 0;
+        perPlayer(player).put(marker, stage);
+    }
 
     // ── Public API ──────────────────────────────────────────────────────────
 
     public static void onAnvilUsed(ServerPlayer player) {
         if (RNG.nextFloat() >= DAMAGE_CHANCE) return;
 
-        int slot = resolveSlot(player);
-        if (slot < 0) { player.closeContainer(); return; }
+        UUID marker = WorkstationManager.getPlayerWorkstationMarker(player);
+        if (marker == null) { player.closeContainer(); return; }
 
-        int stage = perPlayer(player).merge(slot, 1, Integer::sum);
+        int stage = perPlayer(player).merge(marker, 1, Integer::sum);
 
         if (stage >= MAX_STAGES) {
-            breakInSlot(player, slot);
-            perPlayer(player).remove(slot);
+            breakMarkedItem(player, marker);
+            perPlayer(player).remove(marker);
         } else {
-            upgradeInSlot(player, slot);
+            upgradeMarkedItem(player, marker);
         }
     }
 
     public static int getDamageLevel(ServerPlayer player, ResourceLocation ignored) {
-        int slot = resolveSlot(player);
-        if (slot < 0) return 0;
-        Integer s = perPlayer(player).get(slot);
+        UUID marker = WorkstationManager.getPlayerWorkstationMarker(player);
+        if (marker == null) return 0;
+        Integer s = perPlayer(player).get(marker);
         return s != null ? s : 0;
     }
 
     public static void resetDamage(ServerPlayer player, ResourceLocation ignored) {
-        int slot = resolveSlot(player);
-        if (slot >= 0) perPlayer(player).remove(slot);
+        UUID marker = WorkstationManager.getPlayerWorkstationMarker(player);
+        if (marker != null) perPlayer(player).remove(marker);
     }
 
-    // ── Slot resolution ─────────────────────────────────────────────────────
+    // ── Marker-based inventory operations ───────────────────────────────────
 
-    private static int resolveSlot(ServerPlayer player) {
-        int slot = WorkstationManager.getPlayerWorkstationSlot(player);
-        ResourceLocation itemId = WorkstationManager.getPlayerWorkstationItem(player);
-        java.util.UUID marker = WorkstationManager.getPlayerWorkstationMarker(player);
-        if (itemId == null) return -1;
-
-        Inventory inv = player.getInventory();
-        // Quick path: tracked slot still has the right item
-        if (slot >= 0 && slot < inv.items.size()) {
-            ItemStack s = inv.items.get(slot);
-            if (!s.isEmpty() && BuiltInRegistries.ITEM.getKey(s.getItem()).equals(itemId)) return slot;
+    /** Finds the inventory slot containing the item with the given UUID marker. */
+    private static int findSlotByMarker(ServerPlayer player, UUID marker) {
+        if (marker == null) return -1;
+        for (int i = 0; i < player.getInventory().items.size(); i++) {
+            ItemStack s = player.getInventory().items.get(i);
+            if (s.isEmpty()) continue;
+            var cd = s.get(DataComponents.CUSTOM_DATA);
+            if (cd != null && marker.equals(cd.copyTag().getUUID("pw_marker"))) return i;
         }
-        // Marker path: UUID on the item
-        if (marker != null) {
-            for (int i = 0; i < inv.items.size(); i++) {
-                ItemStack s = inv.items.get(i);
-                if (s.isEmpty()) continue;
-                var cd = s.get(net.minecraft.core.component.DataComponents.CUSTOM_DATA);
-                if (cd != null && marker.equals(cd.copyTag().getUUID("pw_marker"))) {
-                    return migrateData(player, slot, i);
-                }
-            }
-        }
-        // Fallback: count-match then first match
-        int expected = WorkstationManager.getPlayerWorkstationCount(player);
-        int best = -1;
-        for (int i = 0; i < inv.items.size(); i++) {
-            ItemStack s = inv.items.get(i);
-            if (s.isEmpty() || !BuiltInRegistries.ITEM.getKey(s.getItem()).equals(itemId)) continue;
-            if (s.getCount() == expected) { best = i; break; }
-            if (best < 0) best = i;
-        }
-        if (best >= 0) return migrateData(player, slot, best);
         return -1;
     }
 
-    private static int migrateData(ServerPlayer player, int oldSlot, int newSlot) {
-        Map<Integer, Integer> map = perPlayer(player);
-        if (oldSlot >= 0 && map.containsKey(oldSlot)) map.put(newSlot, map.remove(oldSlot));
-        WorkstationManager.updateWorkstationSlot(player, newSlot);
-        return newSlot;
+    private static void breakMarkedItem(ServerPlayer player, UUID marker) {
+        int slot = findSlotByMarker(player, marker);
+        if (slot < 0) return;
+
+        ItemStack stack = player.getInventory().items.get(slot);
+        if (stack.isEmpty()) return;
+        stack.shrink(1);
+        if (stack.isEmpty()) player.getInventory().items.set(slot, ItemStack.EMPTY);
+        player.level().playSound(null, player.blockPosition(),
+                SoundEvents.ANVIL_BREAK, SoundSource.BLOCKS, 1.0f, 1.0f);
     }
 
-    // ── Slot operations ─────────────────────────────────────────────────────
+    private static void upgradeMarkedItem(ServerPlayer player, UUID marker) {
+        int slot = findSlotByMarker(player, marker);
+        if (slot < 0) return;
 
-    private static void upgradeInSlot(ServerPlayer player, int slot) {
-        Inventory inv = player.getInventory();
-        if (slot >= inv.items.size()) return;
-        ItemStack stack = inv.items.get(slot);
+        ItemStack stack = player.getInventory().items.get(slot);
         if (stack.isEmpty()) return;
 
         String path = BuiltInRegistries.ITEM.getKey(stack.getItem()).getPath();
@@ -117,24 +110,12 @@ public class AnvilTracker {
         else return;
 
         var newStack = new ItemStack(BuiltInRegistries.ITEM.get(targetId), stack.getCount());
-        var cd = stack.get(net.minecraft.core.component.DataComponents.CUSTOM_DATA);
-        if (cd != null && cd.copyTag().hasUUID("pw_marker"))
-            newStack.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA,
-                    net.minecraft.world.item.component.CustomData.of(cd.copyTag()));
-        inv.items.set(slot, newStack);
+        // Preserve UUID marker
+        var cd = stack.get(DataComponents.CUSTOM_DATA);
+        if (cd != null) newStack.set(DataComponents.CUSTOM_DATA,
+                net.minecraft.world.item.component.CustomData.of(cd.copyTag()));
+        player.getInventory().items.set(slot, newStack);
         WorkstationManager.overrideWorkstationItem(player, targetId);
-    }
-
-    private static void breakInSlot(ServerPlayer player, int slot) {
-        Inventory inv = player.getInventory();
-        if (slot >= inv.items.size()) return;
-        ItemStack stack = inv.items.get(slot);
-        if (stack.isEmpty()) return;
-        stack.shrink(1);
-        if (stack.isEmpty()) inv.items.set(slot, ItemStack.EMPTY);
-        WorkstationManager.clearMarkerFromSlot(player);
-        player.level().playSound(null, player.blockPosition(),
-                SoundEvents.ANVIL_BREAK, SoundSource.BLOCKS, 1.0f, 1.0f);
     }
 
     // ── Block placement ─────────────────────────────────────────────────────
@@ -144,9 +125,9 @@ public class AnvilTracker {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
         if (!event.getPlacedBlock().is(BlockTags.ANVIL)) return;
 
-        int slot = resolveSlot(player);
-        if (slot < 0) return;
-        Integer stage = perPlayer(player).get(slot);
+        UUID marker = WorkstationManager.getPlayerWorkstationMarker(player);
+        if (marker == null) return;
+        Integer stage = perPlayer(player).get(marker);
         if (stage == null || stage <= 0) return;
 
         var newBlock = switch (stage) {
@@ -155,12 +136,12 @@ public class AnvilTracker {
             default -> null;
         };
         if (newBlock != null) player.level().setBlock(event.getPos(), newBlock.defaultBlockState(), 3);
-        // Tracker kept — mining + re-opening inherits stage from item variant
+        // Tracker kept — UUID survives mining + re-open
     }
 
     public static void clear() { TRACKER.clear(); }
 
-    private static Map<Integer, Integer> perPlayer(ServerPlayer player) {
+    private static Map<UUID, Integer> perPlayer(ServerPlayer player) {
         return TRACKER.computeIfAbsent(player, k -> new HashMap<>());
     }
 }

@@ -174,6 +174,9 @@ public class WorkstationManager {
         var data = CustomData.of(tag);
         var displayName = Component.translatable("portableworkstations.anvil.tracked").withStyle(Style.EMPTY.withItalic(false));
 
+        // Initialise tracker stage from the item variant
+        AnvilTracker.initStage(player, marker, stack);
+
         if (stack.getCount() == 1) {
             stack.set(DataComponents.CUSTOM_DATA, data);
             stack.set(DataComponents.CUSTOM_NAME, displayName);
