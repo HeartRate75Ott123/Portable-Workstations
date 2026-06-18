@@ -21,6 +21,8 @@ public class MinecraftMixin {
         if (!CursorState.hasSaved) return;
         long w = ((Minecraft)(Object)this).getWindow().getWindow();
         GLFW.glfwSetCursorPos(w, CursorState.savedX, CursorState.savedY);
-        CursorState.hasSaved = false;
+        // Only consume on actual opens (next != null). Closes keep the flag
+        // alive so the following open can still restore.
+        if (next != null) CursorState.hasSaved = false;
     }
 }
