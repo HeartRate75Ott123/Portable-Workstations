@@ -87,7 +87,6 @@ public class AnvilTracker {
     private static void breakMarkedItem(ServerPlayer player, UUID marker) {
         int slot = findSlotByMarker(player, marker);
         if (slot < 0) return;
-
         ItemStack stack = player.getInventory().items.get(slot);
         if (stack.isEmpty()) return;
         stack.shrink(1);
@@ -99,8 +98,8 @@ public class AnvilTracker {
     private static void upgradeMarkedItem(ServerPlayer player, UUID marker) {
         int slot = findSlotByMarker(player, marker);
         if (slot < 0) return;
-
-        ItemStack stack = player.getInventory().items.get(slot);
+        var inv = player.getInventory().items;
+        ItemStack stack = inv.get(slot);
         if (stack.isEmpty()) return;
 
         String path = BuiltInRegistries.ITEM.getKey(stack.getItem()).getPath();
@@ -109,13 +108,37 @@ public class AnvilTracker {
         else if (path.equals("chipped_anvil")) targetId = ResourceLocation.withDefaultNamespace("damaged_anvil");
         else return;
 
-        var newStack = new ItemStack(BuiltInRegistries.ITEM.get(targetId), stack.getCount());
-        // Preserve UUID marker; remove any custom name
+        if (stack.getCount() == 1) {
+            // Already a single portable — just upgrade in place
+            var upgraded = new ItemStack(BuiltInRegistries.ITEM.get(targetId), 1);
+            var cd = stack.get(DataComponents.CUSTOM_DATA);
+            if (cd != null) upgraded.set(DataComponents.CUSTOM_DATA,
+                    net.minecraft.world.item.component.CustomData.of(cd.copyTag()));
+            upgraded.remove(DataComponents.CUSTOM_NAME);
+            inv.set(slot, upgraded);
+            WorkstationManager.overrideWorkstationItem(player, targetId);
+            return;
+        }
+
+        // Stack > 1: split 1 off, upgrade it, put in a free slot, move marker
+        stack.shrink(1);
+        var tracked = new ItemStack(BuiltInRegistries.ITEM.get(targetId), 1);
+        // Copy marker from original stack
         var cd = stack.get(DataComponents.CUSTOM_DATA);
-        if (cd != null) newStack.set(DataComponents.CUSTOM_DATA,
+        if (cd != null) tracked.set(DataComponents.CUSTOM_DATA,
                 net.minecraft.world.item.component.CustomData.of(cd.copyTag()));
-        newStack.remove(DataComponents.CUSTOM_NAME);
-        player.getInventory().items.set(slot, newStack);
+        // Remove marker from original stack (no longer the tracked item)
+        WorkstationManager.unmarkStack(stack);
+        inv.set(slot, stack);
+
+        // Place the tracked item in the first free slot
+        for (int i = 0; i < inv.size(); i++) {
+            if (inv.get(i).isEmpty()) {
+                inv.set(i, tracked);
+                WorkstationManager.updateWorkstationSlot(player, i);
+                break;
+            }
+        }
         WorkstationManager.overrideWorkstationItem(player, targetId);
     }
 
