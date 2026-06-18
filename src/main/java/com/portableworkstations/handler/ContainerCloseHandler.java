@@ -40,9 +40,14 @@ public class ContainerCloseHandler {
         if (!WorkstationManager.isPortableMenu(menu)) return;
         WorkstationManager.removePortableMenu(menu);
 
-        // Clean up player tracking (auto-close data)
+        // Clean up player tracking — BUT skip for anvils (the portable anvil
+        // item stays in its tracked slot with its UUID marker; merging it back
+        // causes the item to jump to a different slot on next re-open).
         if (player instanceof ServerPlayer serverPlayer) {
-            WorkstationManager.cleanupPlayer(serverPlayer);
+            String mt = WorkstationManager.getPlayerMenuType(serverPlayer);
+            if (!"anvil".equals(mt)) {
+                WorkstationManager.cleanupPlayer(serverPlayer);
+            }
         }
 
         // ── Furnace special case ─────────────────────────────────────────

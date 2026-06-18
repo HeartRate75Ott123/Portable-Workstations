@@ -51,6 +51,8 @@ public class WorkstationManager {
     private static final Map<ServerPlayer, java.util.UUID> PLAYER_WORKSTATION_MARKER = new WeakHashMap<>();
     /** For split anvil tracking: slot that holds the main stack */
     private static final Map<ServerPlayer, Integer> PLAYER_WORKSTATION_ORIGINAL_SLOT = new WeakHashMap<>();
+    /** Menu type of the currently tracked workstation. */
+    private static final Map<ServerPlayer, String> PLAYER_MENU_TYPE = new WeakHashMap<>();
 
     // ── Cache ───────────────────────────────────────────────────────────────
 
@@ -303,6 +305,7 @@ public class WorkstationManager {
 
         player.openMenu(provider);
         PORTABLE_MENUS.add(player.containerMenu);
+        PLAYER_MENU_TYPE.put(player, menuType);
 
         // Let closeContainer → ContainerCloseHandler clean up old tracking
         // (merges back portable anvils) for non-anvil types automatically.
@@ -414,14 +417,20 @@ public class WorkstationManager {
      * Does NOT stop furnace background smelting — that continues until
      * processing is complete or the player logs out.
      */
+    /** Returns the menu type of the currently open portable workstation. */
+    @Nullable
+    public static String getPlayerMenuType(ServerPlayer player) {
+        return PLAYER_MENU_TYPE.get(player);
+    }
+
     public static void cleanupPlayer(ServerPlayer player) {
-        // Merge tracked anvil back into the main stack (if GUI closed before break)
         Integer trackedSlot = PLAYER_WORKSTATION_SLOT.get(player);
         Integer originalSlot = PLAYER_WORKSTATION_ORIGINAL_SLOT.get(player);
         if (trackedSlot != null && originalSlot != null) {
             mergeTrackedAnvilBack(player, trackedSlot, originalSlot);
         }
         clearMarkerFromSlot(player);
+        PLAYER_MENU_TYPE.remove(player);
         PLAYER_WORKSTATION_ITEM.remove(player);
         PLAYER_WORKSTATION_SLOT.remove(player);
         PLAYER_WORKSTATION_ORIGINAL_SLOT.remove(player);

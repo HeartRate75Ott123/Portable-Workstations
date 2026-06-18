@@ -75,9 +75,12 @@ public class InventoryClickHandler {
         // Cancel the vanilla right-click behavior (stack splitting)
         event.setCanceled(true);
 
-        // Save cursor position NOW (right-click time), before any screen transition.
-        com.portableworkstations.client.CursorState.savedX = event.getMouseX();
-        com.portableworkstations.client.CursorState.savedY = event.getMouseY();
+        // Save cursor in GLFW window pixels, not scaled GUI coords.
+        long w = minecraft.getWindow().getWindow();
+        double[] a = new double[1], b = new double[1];
+        org.lwjgl.glfw.GLFW.glfwGetCursorPos(w, a, b);
+        com.portableworkstations.client.CursorState.savedX = a[0];
+        com.portableworkstations.client.CursorState.savedY = b[0];
         com.portableworkstations.client.CursorState.hasSaved = true;
 
         // Tell the server to open the workstation menu
