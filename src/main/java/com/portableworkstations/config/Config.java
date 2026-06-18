@@ -64,7 +64,7 @@ public class Config {
         ).push("furnace_speeds");
         FURNACE_SPEEDS_CONFIG = BUILDER
                 .comment("List of \"block_id=speed\" overrides.")
-                .defineListAllowEmpty("overrides", ArrayList::new, Config::validateSpeedEntry);
+                .defineList("overrides", ArrayList::new, Config::validateSpeedEntry);
         BUILDER.pop();
     }
 
@@ -104,7 +104,7 @@ public class Config {
     }
 
     private static boolean validateSpeedEntry(Object obj) {
-        if (!(obj instanceof String entry)) return false;
+        if (!(obj instanceof String entry) || entry.isBlank()) return false;
         int eq = entry.indexOf('=');
         if (eq <= 0 || eq >= entry.length() - 1) return false;
         String blockId = entry.substring(0, eq);
