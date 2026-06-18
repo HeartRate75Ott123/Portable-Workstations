@@ -301,20 +301,17 @@ public class WorkstationManager {
         MenuProvider provider = createMenuProvider(menuType, player);
         if (provider == null) return;
 
-        // Open menu first so closeContainer → event fires naturally.
         player.openMenu(provider);
         PORTABLE_MENUS.add(player.containerMenu);
 
-        // For non-anvil workstations: clean up old tracking (merge back portable).
-        // For anvils: the portable anvil is already in its tracked slot with a
-        // UUID marker; merging it back and re-splitting causes slot jumping.
-        boolean isAnvil = "anvil".equals(menuType);
-        if (!isAnvil && PLAYER_WORKSTATION_ITEM.containsKey(player)) {
-            cleanupPlayer(player);
-        }
-
+        // Let closeContainer → ContainerCloseHandler clean up old tracking
+        // (merges back portable anvils) for non-anvil types automatically.
+        // For anvils we DON'T want that merge — the portable already has its
+        // UUID marker and should stay in its slot; only the WS tracking maps
+        // need updating.
         PLAYER_WORKSTATION_ITEM.put(player, itemId);
-        // Validate the client-sent slot
+
+        // Validate & resolve the slot
         int slot = -1;
         if (slotIndex >= 0 && slotIndex < player.getInventory().items.size()) {
             var s = player.getInventory().items.get(slotIndex);
@@ -323,18 +320,28 @@ public class WorkstationManager {
         }
         if (slot < 0) return;
 
-        PLAYER_WORKSTATION_SLOT.put(player, slot);
+        // If the slot already has a UUID marker, this IS the tracked portable.
+        // Don't split again — just point tracking at the existing slot.
         var stack = player.getInventory().items.get(slot);
-        PLAYER_WORKSTATION_COUNT.put(player, stack.getCount());
+        boolean isAnvil = "anvil".equals(menuType);
+        boolean isMarked = isAnvil && stack.has(DataComponents.CUSTOM_DATA)
+                && stack.get(DataComponents.CUSTOM_DATA).copyTag().hasUUID("pw_marker");
 
-        if (isAnvil) {
+        if (isMarked) {
+            PLAYER_WORKSTATION_SLOT.put(player, slot);
+            PLAYER_WORKSTATION_COUNT.put(player, stack.getCount());
+            var marker = stack.get(DataComponents.CUSTOM_DATA).copyTag().getUUID("pw_marker");
+            PLAYER_WORKSTATION_MARKER.put(player, marker);
+        } else if (isAnvil) {
             int trackedSlot = splitAnvilForTracking(player, slot);
             if (trackedSlot == -1) { player.closeContainer(); return; }
-            if (trackedSlot != slot) {
+            PLAYER_WORKSTATION_SLOT.put(player, trackedSlot);
+            PLAYER_WORKSTATION_COUNT.put(player, 1);
+            if (trackedSlot != slot)
                 PLAYER_WORKSTATION_ORIGINAL_SLOT.put(player, slot);
-                PLAYER_WORKSTATION_SLOT.put(player, trackedSlot);
-                PLAYER_WORKSTATION_COUNT.put(player, 1);
-            }
+        } else {
+            PLAYER_WORKSTATION_SLOT.put(player, slot);
+            PLAYER_WORKSTATION_COUNT.put(player, stack.getCount());
         }
     }
 
