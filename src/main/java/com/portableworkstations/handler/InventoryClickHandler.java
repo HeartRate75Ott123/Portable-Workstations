@@ -76,7 +76,9 @@ public class InventoryClickHandler {
         event.setCanceled(true);
 
         // Tell the server to open the workstation menu
-        PacketDistributor.sendToServer(new OpenWorkstationPayload(itemId.toString(), slot.getSlotIndex()));
+        // slot.index is the container index (correct player-inventory slot),
+        // NOT getSlotIndex() which is the menu-level index
+        PacketDistributor.sendToServer(new OpenWorkstationPayload(itemId.toString(), slot.index));
         // Pre-set cursor flag so grabMouse centering is skipped when the new screen opens.
         // This handles both cases: open from InventoryScreen (no closeContainer) and
         // switch between workstation GUIs (has closeContainer).

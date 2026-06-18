@@ -293,14 +293,13 @@ public class WorkstationManager {
         String menuType = getMenuType(blockId);
         if (menuType == null) return;
 
-        // Merge old tracked anvil back BEFORE opening new menu.
-        // This prevents openMenu() → closeContainer → cleanupPlayer from
-        // merging during the split, which would cause slot confusion.
-        cleanupPlayer(player);
-
         ResourceLocation itemId = ResourceLocation.parse(blockId);
         MenuProvider provider = createMenuProvider(menuType, player);
         if (provider == null) return;
+
+        // Merge old tracked anvil back BEFORE openMenu so it doesn't happen
+        // mid-split during the internal closeContainer call.
+        cleanupPlayer(player);
 
         player.openMenu(provider);
         PORTABLE_MENUS.add(player.containerMenu);
