@@ -75,6 +75,12 @@ public class InventoryClickHandler {
         // Cancel the vanilla right-click behavior (stack splitting)
         event.setCanceled(true);
 
+        // Save cursor position NOW (right-click time), before any screen transition.
+        // This is the position we want to restore after the new screen opens.
+        com.portableworkstations.mixin.MinecraftMixin.portableworkstations$savedX = event.getMouseX();
+        com.portableworkstations.mixin.MinecraftMixin.portableworkstations$savedY = event.getMouseY();
+        com.portableworkstations.mixin.MinecraftMixin.portableworkstations$hasSaved = true;
+
         // Tell the server to open the workstation menu
         PacketDistributor.sendToServer(new OpenWorkstationPayload(itemId.toString(), slot.getSlotIndex()));
 
