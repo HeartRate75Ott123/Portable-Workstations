@@ -16,7 +16,6 @@
   "portableworkstations.configuration.furnace_auto_detect.enabled": "启用自动检测",
   "portableworkstations.configuration.furnace_auto_detect.default_type": "默认熔炉类型",
 
-  "portableworkstations.anvil.tracked": "便携铁砧",
 
   "portableworkstations.container.crafting": "便携工作台",
   "portableworkstations.container.anvil": "便携铁砧",

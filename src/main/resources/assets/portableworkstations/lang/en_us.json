@@ -16,7 +16,6 @@
   "portableworkstations.configuration.furnace_auto_detect.enabled": "Auto-Detect Furnace",
   "portableworkstations.configuration.furnace_auto_detect.default_type": "Default Furnace Type",
 
-  "portableworkstations.anvil.tracked": "Portable Anvil",
 
   "portableworkstations.container.crafting": "Crafting",
   "portableworkstations.container.anvil": "Anvil",

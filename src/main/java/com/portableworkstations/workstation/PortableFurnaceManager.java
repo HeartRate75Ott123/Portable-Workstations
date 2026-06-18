@@ -58,14 +58,16 @@ public class PortableFurnaceManager {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
         if (!(event.getPlacedBlock().getBlock() instanceof AbstractFurnaceBlock)) return;
 
+
+        FurnaceState state = ACTIVE_FURNACES.get(player.getUUID());
+        if (state == null) return;
         RecipeType<? extends AbstractCookingRecipe> recipeType;
         if (event.getPlacedBlock().is(Blocks.FURNACE))          recipeType = RecipeType.SMELTING;
         else if (event.getPlacedBlock().is(Blocks.BLAST_FURNACE)) recipeType = RecipeType.BLASTING;
         else if (event.getPlacedBlock().is(Blocks.SMOKER))      recipeType = RecipeType.SMOKING;
-        else return;
+        else                                                    recipeType = state.recipeType;
 
-        FurnaceState state = ACTIVE_FURNACES.get(player.getUUID());
-        if (state == null) return;
+        if (!state.recipeType.equals(recipeType)) return;
         if (!(player.level().getBlockEntity(event.getPos()) instanceof AbstractFurnaceBlockEntity be)) return;
 
         for (int i = 0; i < 3; i++) {
