@@ -48,7 +48,7 @@ public class PortableWorkstations {
                     .resolve("portableworkstations-common.toml");
             if (!Files.exists(p)) return;
             String c = Files.readString(p);
-            if (!c.contains("furnace_detection") && !c.contains("overrides = [")) {
+            if (c.contains("furnace_auto_detect") || c.contains("entries = [")) {
                 Files.delete(p);
                 LOGGER.info("Deleted outdated config; fresh defaults generated.");
             }
