@@ -13,13 +13,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(Minecraft.class)
 public class MinecraftMixin {
 
-    /** Directly set MouseHandler position + GLFW position. */
+    /** Set GLFW cursor + MouseHandler internal position. */
     private static void setPos(Minecraft self, double x, double y) {
         long w = self.getWindow().getWindow();
         GLFW.glfwSetCursorPos(w, x, y);
-        // Also set MouseHandler fields directly so render uses them immediately.
-        self.mouseHandler.xpos = x;
-        self.mouseHandler.ypos = y;
+        var acc = (MouseHandlerAccessor) self.mouseHandler;
+        acc.setXpos(x);
+        acc.setYpos(y);
     }
 
     /** Early restore: right after releaseMouse, before any init/render. */
