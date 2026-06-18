@@ -39,6 +39,18 @@ public class PortableFurnaceManager {
         FURNACE_SPEEDS.put(itemId, Math.max(1, speed));
     }
 
+    /** Load speed overrides from config (called on reload). */
+    public static void loadSpeedsFromConfig() {
+        FURNACE_SPEEDS.clear();
+        for (String entry : com.portableworkstations.config.Config.FURNACE_SPEEDS_CONFIG.get()) {
+            int eq = entry.indexOf('=');
+            if (eq > 0) try {
+                FURNACE_SPEEDS.put(entry.substring(0, eq),
+                        Math.max(1, Integer.parseInt(entry.substring(eq + 1))));
+            } catch (NumberFormatException ignored) {}
+        }
+    }
+
     // ── Public API ──────────────────────────────────────────────────────────
 
     public static FurnaceState startOrGet(ServerPlayer player, ResourceLocation blockId,

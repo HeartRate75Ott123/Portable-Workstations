@@ -78,7 +78,8 @@ public class WorkstationManager {
     /** Called from the mod event bus when the config is reloaded. */
     public static void onConfigReload(ModConfigEvent.Reloading event) {
         if (event.getConfig().getSpec() == Config.SPEC) {
-            WORKSTATION_CACHE = null; // rebuild on next access
+            WORKSTATION_CACHE = null;
+            PortableFurnaceManager.loadSpeedsFromConfig(); // reload furnace speeds
         }
     }
 

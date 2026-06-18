@@ -33,6 +33,10 @@ public class PortableWorkstations {
         modEventBus.addListener(ServerPayloadHandler::registerPackets);
         // Rebuild workstation cache when config reloads
         modEventBus.addListener(WorkstationManager::onConfigReload);
+        // Load furnace speeds from config on first load
+        modEventBus.addListener(net.neoforged.fml.event.config.ModConfigEvent.Loading.class,
+            event -> { if (event.getConfig().getSpec() == Config.SPEC)
+                PortableFurnaceManager.loadSpeedsFromConfig(); });
 
         // Register event handlers on the global game bus
         NeoForge.EVENT_BUS.register(ContainerCloseHandler.class);
