@@ -32,7 +32,7 @@ public class PortableFurnaceManager {
     private static final Map<UUID, FurnaceState> ACTIVE_FURNACES = new HashMap<>();
 
     /** Item ID → cooking speed multiplier. Registered by mods like Iron Furnaces. */
-    private static final Map<String, Float> FURNACE_SPEEDS = new HashMap<>();
+    private static final Map<String, Integer> FURNACE_SPEEDS = new HashMap<>();
 
     /** Register a cooking speed multiplier (default 1 = vanilla) for a furnace item. */
     public static void registerFurnaceSpeed(String itemId, int speed) {
