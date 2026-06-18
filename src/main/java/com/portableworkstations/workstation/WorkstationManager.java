@@ -266,7 +266,11 @@ public class WorkstationManager {
 
     /** Functional interface for custom menu factories (Iron Furnaces, etc.). */
     @FunctionalInterface
-    public interface MenuFactory extends BiFunction<Integer, net.minecraft.world.entity.player.Inventory, AbstractContainerMenu> {}
+    public interface MenuFactory extends BiFunction<Integer, net.minecraft.world.entity.player.Inventory, AbstractContainerMenu> {
+        default AbstractContainerMenu create(int id, net.minecraft.world.entity.player.Inventory inv, net.minecraft.world.entity.player.Player player) {
+            return apply(id, inv);
+        }
+    }
 
     private static final Map<String, MenuFactory> PLUGIN_MENUS = new HashMap<>();
 
@@ -283,7 +287,7 @@ public class WorkstationManager {
 
         MenuFactory pluginFactory = PLUGIN_MENUS.get(menuType);
         if (pluginFactory != null) {
-            return new SimpleMenuProvider((id, inv, p) -> pluginFactory.apply(id, inv), title);
+            return new SimpleMenuProvider((id, inv, p) -> pluginFactory.create(id, inv, p), title);
         }
 
         return new SimpleMenuProvider((containerId, inventory, unused) -> {
