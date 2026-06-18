@@ -6,6 +6,7 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.Style;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.server.level.ServerPlayer;
@@ -171,7 +172,7 @@ public class WorkstationManager {
         var tag = new CompoundTag();
         tag.putUUID("pw_marker", marker);
         var data = CustomData.of(tag);
-        var displayName = Component.translatable("portableworkstations.anvil.tracked");
+        var displayName = Component.translatable("portableworkstations.anvil.tracked").withStyle(Style.EMPTY.withItalic(false));
 
         if (stack.getCount() == 1) {
             stack.set(DataComponents.CUSTOM_DATA, data);
