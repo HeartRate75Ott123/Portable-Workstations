@@ -10,6 +10,8 @@
   "portableworkstations.configuration.section.workstations.toml.title": "工作站列表",
   "portableworkstations.configuration.general.enabled": "启用",
   "portableworkstations.configuration.workstations.definitions": "工作站列表",
+  "portableworkstations.configuration.enabled": "启用",
+  "portableworkstations.configuration.definitions": "工作站列表",
   "portableworkstations.configuration.section.furnace_auto_detect.toml": "熔炉检测",
   "portableworkstations.configuration.section.furnace_auto_detect.toml.title": "熔炉检测",
   "portableworkstations.configuration.section.furnace_detection.toml": "熔炉检测",

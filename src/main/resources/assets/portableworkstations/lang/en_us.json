@@ -10,6 +10,8 @@
   "portableworkstations.configuration.section.workstations.toml.title": "Workstation List",
   "portableworkstations.configuration.general.enabled": "Enabled",
   "portableworkstations.configuration.workstations.definitions": "Workstation List",
+  "portableworkstations.configuration.enabled": "Enabled",
+  "portableworkstations.configuration.definitions": "Workstation List",
   "portableworkstations.configuration.section.furnace_auto_detect.toml": "Furnace Detection",
   "portableworkstations.configuration.section.furnace_auto_detect.toml.title": "Furnace Detection",
   "portableworkstations.configuration.section.furnace_detection.toml": "Furnace Detection",
