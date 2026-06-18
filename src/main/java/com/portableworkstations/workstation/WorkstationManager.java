@@ -220,7 +220,7 @@ public class WorkstationManager {
         if (menuType == null) return;
 
         ResourceLocation itemId = ResourceLocation.parse(blockId);
-        MenuProvider provider = createMenuProvider(menuType, player);
+        MenuProvider provider = createMenuProvider(menuType, player, itemId);
         if (provider == null) return;
 
         // Set menu type BEFORE openMenu so closeContainer → ContainerCloseHandler
@@ -291,7 +291,7 @@ public class WorkstationManager {
 
     // ── Menu creation ─────────────────────────────────────────────────
 
-    private static MenuProvider createMenuProvider(String menuType, ServerPlayer player) {
+    private static MenuProvider createMenuProvider(String menuType, ServerPlayer player, ResourceLocation blockId) {
         Component title = getTitle(menuType);
         var access = PortableContainerLevelAccess.create(player.level());
 
@@ -310,18 +310,15 @@ public class WorkstationManager {
                 case "cartography"    -> new CartographyTableMenu(containerId, inventory, access);
                 case "loom"           -> new LoomMenu(containerId, inventory, access);
                 case "furnace" -> {
-                    var state = PortableFurnaceManager.startOrGet(player,
-                            ResourceLocation.parse("minecraft:furnace"), RecipeType.SMELTING);
+                    var state = PortableFurnaceManager.startOrGet(player, blockId, RecipeType.SMELTING);
                     yield new FurnaceMenu(containerId, inventory, state.container, state.data);
                 }
                 case "blast_furnace" -> {
-                    var state = PortableFurnaceManager.startOrGet(player,
-                            ResourceLocation.parse("minecraft:blast_furnace"), RecipeType.BLASTING);
+                    var state = PortableFurnaceManager.startOrGet(player, blockId, RecipeType.BLASTING);
                     yield new BlastFurnaceMenu(containerId, inventory, state.container, state.data);
                 }
                 case "smoker" -> {
-                    var state = PortableFurnaceManager.startOrGet(player,
-                            ResourceLocation.parse("minecraft:smoker"), RecipeType.SMOKING);
+                    var state = PortableFurnaceManager.startOrGet(player, blockId, RecipeType.SMOKING);
                     yield new SmokerMenu(containerId, inventory, state.container, state.data);
                 }
                 default -> throw new IllegalArgumentException("Unknown menu type: " + menuType);
