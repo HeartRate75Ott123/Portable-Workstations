@@ -136,19 +136,23 @@ public class WorkstationManager {
         PLAYER_WORKSTATION_ITEM.put(player, newId);
     }
 
-    /** Splits 1 from the anvil stack into a dedicated tracked slot + applies UUID marker. */
+    /** Splits 1 from anvil stack → tracked slot. Reuses existing UUID marker if present. */
     public static int splitAnvilForTracking(ServerPlayer player, int sourceSlot) {
         var inv = player.getInventory().items;
         ItemStack stack = inv.get(sourceSlot);
         if (stack.isEmpty()) return sourceSlot;
 
-        var marker = java.util.UUID.randomUUID();
+        // Reuse existing marker if the item already has one
+        var existing = stack.get(DataComponents.CUSTOM_DATA);
+        java.util.UUID marker = existing != null && existing.copyTag().hasUUID("pw_marker")
+                ? existing.copyTag().getUUID("pw_marker")
+                : java.util.UUID.randomUUID();
         var tag = new CompoundTag();
         tag.putUUID("pw_marker", marker);
+        var data = CustomData.of(tag);
 
         if (stack.getCount() == 1) {
-            // Single item — mark in place
-            stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+            stack.set(DataComponents.CUSTOM_DATA, data);
             inv.set(sourceSlot, stack);
             PLAYER_WORKSTATION_MARKER.put(player, marker);
             return sourceSlot;
@@ -159,13 +163,12 @@ public class WorkstationManager {
         for (int i = 0; i < inv.size(); i++) {
             if (inv.get(i).isEmpty()) {
                 var tracked = new ItemStack(stack.getItem(), 1);
-                tracked.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+                tracked.set(DataComponents.CUSTOM_DATA, data);
                 inv.set(i, tracked);
                 PLAYER_WORKSTATION_MARKER.put(player, marker);
                 return i;
             }
         }
-        // No free slot — restore
         stack.grow(1);
         return sourceSlot;
     }
