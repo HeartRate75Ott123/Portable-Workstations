@@ -50,7 +50,6 @@ public class WorkstationManager {
     private static final Map<ServerPlayer, Integer> PLAYER_WORKSTATION_COUNT = new WeakHashMap<>();
     /** Transient UUID marker on the item, so indistinguishable stacks can be told apart. */
     private static final Map<ServerPlayer, java.util.UUID> PLAYER_WORKSTATION_MARKER = new WeakHashMap<>();
-    /** For split anvil tracking: slot that holds the main stack */
     /** Menu type of the currently tracked workstation. */
     private static final Map<ServerPlayer, String> PLAYER_MENU_TYPE = new WeakHashMap<>();
 
@@ -201,7 +200,6 @@ public class WorkstationManager {
         return PLAYER_WORKSTATION_COUNT.getOrDefault(player, 0);
     }
 
-    // findSlotForItem removed — slot index is sent from client via OpenWorkstationPayload
 
     // ── Menu opening ────────────────────────────────────────────────────────
 
