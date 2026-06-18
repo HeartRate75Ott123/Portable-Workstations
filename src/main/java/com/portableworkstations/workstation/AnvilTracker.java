@@ -110,10 +110,11 @@ public class AnvilTracker {
         else return;
 
         var newStack = new ItemStack(BuiltInRegistries.ITEM.get(targetId), stack.getCount());
-        // Preserve UUID marker
+        // Preserve UUID marker; remove any custom name
         var cd = stack.get(DataComponents.CUSTOM_DATA);
         if (cd != null) newStack.set(DataComponents.CUSTOM_DATA,
                 net.minecraft.world.item.component.CustomData.of(cd.copyTag()));
+        newStack.remove(DataComponents.CUSTOM_NAME);
         player.getInventory().items.set(slot, newStack);
         WorkstationManager.overrideWorkstationItem(player, targetId);
     }

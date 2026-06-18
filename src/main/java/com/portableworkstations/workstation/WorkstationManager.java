@@ -140,11 +140,30 @@ public class WorkstationManager {
         PLAYER_WORKSTATION_ITEM.put(player, newId);
     }
 
-    /** Maximum portable anvils in inventory (prevents excessive slot usage from splitting). */
-    private static final int MAX_PORTABLE_ANVILS = 2;
+    // ─── CUSTOM_DATA marker helpers ────────────────────────────────────
 
-    /** Counts items with a pw_marker UUID in the player's inventory. */
-    private static int countTrackedAnvils(ServerPlayer player) {
+    /** Returns true if the stack already has our pw_marker UUID. */
+    public static boolean hasMarker(ItemStack stack) {
+        var cd = stack.get(DataComponents.CUSTOM_DATA);
+        return cd != null && cd.copyTag().hasUUID("pw_marker");
+    }
+
+    /** Adds pw_marker to the stack (no split, no rename). Returns the marker UUID. */
+    public static UUID markStack(ItemStack stack) {
+        UUID marker = UUID.randomUUID();
+        var tag = new CompoundTag();
+        tag.putUUID("pw_marker", marker);
+        stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+        return marker;
+    }
+
+    /** Removes pw_marker + any CUSTOM_NAME from the stack. */
+    public static void unmarkStack(ItemStack stack) {
+        stack.remove(DataComponents.CUSTOM_DATA);
+        stack.remove(DataComponents.CUSTOM_NAME);
+    }
+
+    public static int countTrackedAnvils(ServerPlayer player) {
         int n = 0;
         for (var stack : player.getInventory().items) {
             if (stack.isEmpty()) continue;
@@ -154,103 +173,6 @@ public class WorkstationManager {
         return n;
     }
 
-    /** Splits 1 from anvil stack → tracked slot. Reuses existing UUID marker if present. */
-    public static int splitAnvilForTracking(ServerPlayer player, int sourceSlot) {
-        var inv = player.getInventory().items;
-        ItemStack stack = inv.get(sourceSlot);
-        if (stack.isEmpty()) return sourceSlot;
-
-        // Reuse existing marker if the item already has one
-        var existing = stack.get(DataComponents.CUSTOM_DATA);
-        boolean hasMarker = existing != null && existing.copyTag().hasUUID("pw_marker");
-        java.util.UUID marker = hasMarker ? existing.copyTag().getUUID("pw_marker")
-                : java.util.UUID.randomUUID();
-
-        // Already a valid tracked portable anvil — no split needed
-        if (hasMarker) {
-            PLAYER_WORKSTATION_MARKER.put(player, marker);
-            return sourceSlot;
-        }
-
-        // Enforce max portable anvil limit (only for NEW tracking)
-        if (countTrackedAnvils(player) >= MAX_PORTABLE_ANVILS) return -1;
-
-        var tag = new CompoundTag();
-        tag.putUUID("pw_marker", marker);
-        var data = CustomData.of(tag);
-        var displayName = Component.translatable("portableworkstations.anvil.tracked").withStyle(Style.EMPTY.withItalic(false));
-
-        // Initialise tracker stage from the item variant
-        AnvilTracker.initStage(player, marker, stack);
-
-        if (stack.getCount() == 1) {
-            stack.set(DataComponents.CUSTOM_DATA, data);
-            stack.set(DataComponents.CUSTOM_NAME, displayName);
-            inv.set(sourceSlot, stack);
-            PLAYER_WORKSTATION_MARKER.put(player, marker);
-            return sourceSlot;
-        }
-
-        // Stack > 1 — split 1 off into a free slot
-        stack.shrink(1);
-        for (int i = 0; i < inv.size(); i++) {
-            if (inv.get(i).isEmpty()) {
-                var tracked = new ItemStack(stack.getItem(), 1);
-                tracked.set(DataComponents.CUSTOM_DATA, data);
-                tracked.set(DataComponents.CUSTOM_NAME, displayName);
-                inv.set(i, tracked);
-                PLAYER_WORKSTATION_MARKER.put(player, marker);
-                return i;
-            }
-        }
-        stack.grow(1);
-        return sourceSlot;
-    }
-
-    /** Merges the tracked anvil back into the original stack (GUI closed before break). */
-    public static void mergeTrackedAnvilBack(ServerPlayer player, int trackedSlot, int originalSlot) {
-        var inv = player.getInventory().items;
-        if (trackedSlot < 0 || trackedSlot >= inv.size()) return;
-        ItemStack tracked = inv.get(trackedSlot);
-        if (tracked.isEmpty()) return;
-
-        // First try merging into original slot
-        if (originalSlot >= 0 && originalSlot < inv.size()) {
-            ItemStack dest = inv.get(originalSlot);
-            if (!dest.isEmpty() && net.minecraft.world.item.ItemStack.isSameItemSameComponents(dest, tracked)) {
-                int space = dest.getMaxStackSize() - dest.getCount();
-                int toMove = Math.min(space, tracked.getCount());
-                if (toMove > 0) {
-                    dest.grow(toMove);
-                    tracked.shrink(toMove);
-                    if (tracked.isEmpty()) { inv.set(trackedSlot, ItemStack.EMPTY); return; }
-                }
-            }
-        }
-        // Fallback: merge into any matching stack
-        for (int i = 0; i < inv.size(); i++) {
-            if (i == trackedSlot) continue;
-            ItemStack dest = inv.get(i);
-            if (!dest.isEmpty() && net.minecraft.world.item.ItemStack.isSameItemSameComponents(dest, tracked)) {
-                int space = dest.getMaxStackSize() - dest.getCount();
-                int toMove = Math.min(space, tracked.getCount());
-                if (toMove > 0) {
-                    dest.grow(toMove);
-                    tracked.shrink(toMove);
-                    if (tracked.isEmpty()) { inv.set(trackedSlot, ItemStack.EMPTY); return; }
-                }
-            }
-        }
-        // Last resort: put in first empty slot
-        for (int i = 0; i < inv.size(); i++) {
-            if (inv.get(i).isEmpty()) {
-                inv.set(i, tracked);
-                inv.set(trackedSlot, ItemStack.EMPTY);
-                return;
-            }
-        }
-    }
-
     /** Clears the marker tag from the item in the tracked slot (called after operation). */
     public static void clearMarkerFromSlot(ServerPlayer player) {
         int slot = PLAYER_WORKSTATION_SLOT.getOrDefault(player, -1);
@@ -258,11 +180,9 @@ public class WorkstationManager {
         if (marker == null || slot < 0 || slot >= player.getInventory().items.size()) return;
         ItemStack stack = player.getInventory().items.get(slot);
         if (!stack.isEmpty()) {
-            CustomData cd = stack.get(DataComponents.CUSTOM_DATA);
+            var cd = stack.get(DataComponents.CUSTOM_DATA);
             if (cd != null && marker.equals(cd.copyTag().getUUID("pw_marker"))) {
-                var updated = cd.update(t -> t.remove("pw_marker"));
-                if (updated.isEmpty()) stack.remove(DataComponents.CUSTOM_DATA);
-                else stack.set(DataComponents.CUSTOM_DATA, updated);
+                unmarkStack(stack);
                 player.getInventory().items.set(slot, stack);
             }
         }
@@ -325,25 +245,18 @@ public class WorkstationManager {
         }
         if (slot < 0) return;
 
-        // If the slot already has a UUID marker, this IS the tracked portable.
-        // Don't split again — just point tracking at the existing slot.
         var stack = player.getInventory().items.get(slot);
         boolean isAnvil = "anvil".equals(menuType);
-        boolean isMarked = isAnvil && stack.has(DataComponents.CUSTOM_DATA)
-                && stack.get(DataComponents.CUSTOM_DATA).copyTag().hasUUID("pw_marker");
 
-        if (isMarked) {
+        if (isAnvil) {
+            // Temporary marker for this session — removed on GUI close.
+            if (countTrackedAnvils(player) >= 1) { player.closeContainer(); return; }
+            UUID marker = markStack(stack);
+            player.getInventory().items.set(slot, stack);
+            PLAYER_WORKSTATION_MARKER.put(player, marker);
             PLAYER_WORKSTATION_SLOT.put(player, slot);
             PLAYER_WORKSTATION_COUNT.put(player, stack.getCount());
-            var marker = stack.get(DataComponents.CUSTOM_DATA).copyTag().getUUID("pw_marker");
-            PLAYER_WORKSTATION_MARKER.put(player, marker);
-        } else if (isAnvil) {
-            int trackedSlot = splitAnvilForTracking(player, slot);
-            if (trackedSlot == -1) { player.closeContainer(); return; }
-            PLAYER_WORKSTATION_SLOT.put(player, trackedSlot);
-            PLAYER_WORKSTATION_COUNT.put(player, 1);
-            if (trackedSlot != slot)
-                PLAYER_WORKSTATION_ORIGINAL_SLOT.put(player, slot);
+            AnvilTracker.initStage(player, marker, stack);
         } else {
             PLAYER_WORKSTATION_SLOT.put(player, slot);
             PLAYER_WORKSTATION_COUNT.put(player, stack.getCount());
@@ -426,16 +339,10 @@ public class WorkstationManager {
     }
 
     public static void cleanupPlayer(ServerPlayer player) {
-        Integer trackedSlot = PLAYER_WORKSTATION_SLOT.get(player);
-        Integer originalSlot = PLAYER_WORKSTATION_ORIGINAL_SLOT.get(player);
-        if (trackedSlot != null && originalSlot != null) {
-            mergeTrackedAnvilBack(player, trackedSlot, originalSlot);
-        }
         clearMarkerFromSlot(player);
         PLAYER_MENU_TYPE.remove(player);
         PLAYER_WORKSTATION_ITEM.remove(player);
         PLAYER_WORKSTATION_SLOT.remove(player);
-        PLAYER_WORKSTATION_ORIGINAL_SLOT.remove(player);
         PLAYER_WORKSTATION_COUNT.remove(player);
         PLAYER_WORKSTATION_MARKER.remove(player);
         PORTABLE_MENUS.remove(player.containerMenu);

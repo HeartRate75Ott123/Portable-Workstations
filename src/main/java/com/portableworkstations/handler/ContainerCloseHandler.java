@@ -41,13 +41,6 @@ public class ContainerCloseHandler {
         WorkstationManager.removePortableMenu(menu);
 
         if (player instanceof ServerPlayer serverPlayer) {
-            String mt = WorkstationManager.getPlayerMenuType(serverPlayer);
-
-            // ── Anvil: skip EVERYTHING — don't merge, don't move slots,
-            //     don't iterate. The portable anvil stays in its tracked slot.
-            if ("anvil".equals(mt)) return;
-
-            // ── Other workstations: clean up tracking normally.
             WorkstationManager.cleanupPlayer(serverPlayer);
         }
 
